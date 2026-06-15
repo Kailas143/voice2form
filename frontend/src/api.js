@@ -42,7 +42,7 @@ export async function transcribeAudio({ audioFile, templateId, template, languag
   return parseResponse(response, "Could not transcribe audio. Please try again.");
 }
 
-export async function submitRecord({ templateId, template, fields, language, accessToken }) {
+export async function submitRecord({ templateId, template, fields, language, accessToken, targetSheetUrl }) {
   const response = await fetch(`${API_BASE_URL}/api/submit`, {
     method: "POST",
     headers: {
@@ -53,7 +53,8 @@ export async function submitRecord({ templateId, template, fields, language, acc
       template: templateId ? null : template,
       fields,
       language,
-      access_token: accessToken
+      access_token: accessToken,
+      target_sheet_url: targetSheetUrl
     })
   });
   return parseResponse(response, "Could not save record. Contact support.");

@@ -28,11 +28,17 @@ def _get_client(access_token: str | None = None):
         raise RuntimeError(f"Authentication failed with provided token. Error: {exc}") from exc
 
 
-def _get_or_create_worksheet(client, spreadsheet_name: str, sheet_name: str):
-    try:
-        spreadsheet = client.open(spreadsheet_name)
-    except Exception:
-        spreadsheet = client.create(spreadsheet_name)
+def _get_or_create_worksheet(client, spreadsheet_name: str, sheet_name: str, target_sheet_url: str | None = None):
+    if target_sheet_url:
+        try:
+            spreadsheet = client.open_by_url(target_sheet_url)
+        except Exception as exc:
+            raise RuntimeError(f"Could not open the provided Google Sheet URL. Ensure the URL is correct and the sheet is accessible. Error: {exc}") from exc
+    else:
+        try:
+            spreadsheet = client.open(spreadsheet_name)
+        except Exception:
+            spreadsheet = client.create(spreadsheet_name)
 
     try:
         return spreadsheet.worksheet(sheet_name)
@@ -45,10 +51,10 @@ def _ensure_headers(worksheet, headers: list[str]) -> None:
         worksheet.append_row(["Timestamp"] + headers)
 
 
-def append_record(form_name: str, category: str, fields: dict[str, str], access_token: str | None = None) -> str:
+def append_record(form_name: str, category: str, fields: dict[str, str], access_token: str | None = None, target_sheet_url: str | None = None) -> str:
     del form_name
     client = _get_client(access_token)
-    worksheet = _get_or_create_worksheet(client, SPREADSHEET_NAME, category)
+    worksheet = _get_or_create_worksheet(client, SPREADSHEET_NAME, category, target_sheet_url)
     _ensure_headers(worksheet, list(fields.keys()))
     row = [datetime.now().strftime("%d-%m-%Y %H:%M")] + list(fields.values())
     worksheet.append_row(row, value_input_option="USER_ENTERED")

@@ -37,3 +37,4 @@ class SubmitPayload(BaseModel):
     language: str = "hi-IN"
     template: Template | None = None
     access_token: str | None = None
+    target_sheet_url: str | None = None

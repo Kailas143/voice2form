@@ -39,6 +39,23 @@ function countFilledFields(fields) {
   return fields.filter((field) => field.value.trim()).length;
 }
 
+function getFieldEmoji(field) {
+  const name = (field.name || "").toLowerCase();
+  const type = (field.type || "").toLowerCase();
+
+  if (type === "email" || name.includes("email")) return "📧";
+  if (type === "phone" || name.includes("phone") || name.includes("mobile")) return "📞";
+  if (type === "date" || name.includes("date") || name.includes("dob") || name.includes("time")) return "📅";
+  if (name.includes("address") || name.includes("location") || name.includes("city") || name.includes("pin")) return "📍";
+  if (name.includes("name") || name.includes("person") || name.includes("user")) return "👤";
+  
+  if (name.includes("gender")) return "🚻";
+  if (type === "number" || name.includes("age") || name.includes("amount") || name.includes("price") || name.includes("budget")) return "🔢";
+  if (type === "textarea" || name.includes("desc") || name.includes("note") || name.includes("complaint")) return "📄";
+  
+  return "📝";
+}
+
 export default function App() {
   const [templates, setTemplates] = useState({});
   const [selectedTemplate, setSelectedTemplate] = useState(null);
@@ -59,6 +76,7 @@ export default function App() {
   const [accessToken, setAccessToken] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [newFieldName, setNewFieldName] = useState("");
+  const [targetSheetUrl, setTargetSheetUrl] = useState("");
 
   const login = useGoogleLogin({
     onSuccess: (tokenResponse) => {
@@ -272,7 +290,8 @@ export default function App() {
         template: selectedTemplate.source === "custom" ? selectedTemplate : null,
         fields,
         language,
-        accessToken: token
+        accessToken: token,
+        targetSheetUrl: targetSheetUrl.trim() || null
       });
       setSubmitMeta({
         ...payload,
@@ -405,7 +424,7 @@ export default function App() {
                 <div className="chip-row">
                   {selectedTemplate.fields.map((field) => (
                     <span key={field.name} className="field-chip">
-                      {field.name}
+                      {getFieldEmoji(field)} {field.name}
                     </span>
                   ))}
                 </div>
@@ -420,6 +439,22 @@ export default function App() {
                     Add
                   </button>
                 </form>
+              </div>
+            ) : null}
+
+            {selectedTemplate ? (
+              <div className="preview-card">
+                <div className="section-head">
+                  <h3>Target Google Sheet (Optional)</h3>
+                  <p>Paste the URL of an existing Google Sheet to sync data to it. Leave empty to create/use the default sheet.</p>
+                </div>
+                <input
+                  type="url"
+                  placeholder="https://docs.google.com/spreadsheets/d/..."
+                  value={targetSheetUrl}
+                  onChange={(e) => setTargetSheetUrl(e.target.value)}
+                  style={{ width: "100%", padding: "0.75rem", borderRadius: "8px", border: "1px solid var(--border-color, rgba(255,255,255,0.1))", background: "var(--input-bg, rgba(0,0,0,0.2))", color: "inherit", boxSizing: "border-box" }}
+                />
               </div>
             ) : null}
 
@@ -532,7 +567,7 @@ export default function App() {
                 return (
                   <label key={field.name} className={`field-card ${inputClass}`}>
                     <div className="field-head">
-                      <span>{field.name}</span>
+                      <span>{getFieldEmoji(field)} {field.name}</span>
                       <span className="badge">{badge}</span>
                     </div>
                     {field.type === "textarea" ? (

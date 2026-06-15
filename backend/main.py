@@ -152,6 +152,7 @@ def submit_form(payload: SubmitPayload):
             category=sheet_category,
             fields=normalized_fields,
             access_token=payload.access_token,
+            target_sheet_url=payload.target_sheet_url,
         )
     except RuntimeError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
