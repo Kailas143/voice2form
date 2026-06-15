@@ -1,0 +1,15 @@
+{
+  "id": "patient_intake",
+  "name": "Patient intake",
+  "category": "Healthcare",
+  "language": "hi-IN",
+  "fields": [
+    {"name": "Patient name", "type": "text", "required": true},
+    {"name": "Age", "type": "number", "required": true},
+    {"name": "Phone", "type": "phone", "required": true},
+    {"name": "Symptoms", "type": "textarea", "required": true},
+    {"name": "Duration", "type": "text", "required": false, "hint": "How long — e.g. 3 days"},
+    {"name": "Doctor", "type": "text", "required": false}
+  ]
+}
+

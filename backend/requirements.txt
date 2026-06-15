@@ -1,0 +1,11 @@
+fastapi
+gspread
+google-auth
+google-generativeai
+pydantic
+python-dotenv
+python-multipart
+requests
+uvicorn
+pypdf
+python-docx

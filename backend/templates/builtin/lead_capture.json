@@ -1,0 +1,16 @@
+{
+  "id": "lead_capture",
+  "name": "Lead capture",
+  "category": "Sales",
+  "language": "hi-IN",
+  "fields": [
+    {"name": "Name", "type": "text", "required": true},
+    {"name": "Mobile", "type": "phone", "required": true},
+    {"name": "Email", "type": "email", "required": false},
+    {"name": "Company", "type": "text", "required": false},
+    {"name": "Requirement", "type": "textarea", "required": true},
+    {"name": "Budget", "type": "text", "required": false, "hint": "Approximate budget range"},
+    {"name": "Follow-up", "type": "date", "required": false}
+  ]
+}
+

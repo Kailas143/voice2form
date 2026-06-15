@@ -1,0 +1,15 @@
+{
+  "id": "service_booking",
+  "name": "Service booking",
+  "category": "Service",
+  "language": "hi-IN",
+  "fields": [
+    {"name": "Customer name", "type": "text", "required": true},
+    {"name": "Phone", "type": "phone", "required": true},
+    {"name": "Service type", "type": "text", "required": true, "hint": "e.g. plumbing, electrical"},
+    {"name": "Location", "type": "text", "required": true},
+    {"name": "Date", "type": "date", "required": true},
+    {"name": "Time slot", "type": "text", "required": false, "hint": "Morning / Afternoon / Evening"}
+  ]
+}
+

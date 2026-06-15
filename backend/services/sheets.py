@@ -1,0 +1,55 @@
+import json
+from datetime import datetime
+from functools import lru_cache
+
+import os
+from config import SPREADSHEET_NAME
+
+SCOPES = [
+    "https://www.googleapis.com/auth/spreadsheets",
+    "https://www.googleapis.com/auth/drive",
+]
+
+
+def _get_client(access_token: str | None = None):
+    try:
+        import gspread
+        from google.oauth2.credentials import Credentials
+    except Exception as exc:
+        raise RuntimeError("Could not save record. Contact support. gspread missing.") from exc
+
+    if not access_token:
+        raise RuntimeError("Google access token is required to save to your Sheet.")
+
+    try:
+        creds = Credentials(token=access_token)
+        return gspread.authorize(creds)
+    except Exception as exc:
+        raise RuntimeError(f"Authentication failed with provided token. Error: {exc}") from exc
+
+
+def _get_or_create_worksheet(client, spreadsheet_name: str, sheet_name: str):
+    try:
+        spreadsheet = client.open(spreadsheet_name)
+    except Exception:
+        spreadsheet = client.create(spreadsheet_name)
+
+    try:
+        return spreadsheet.worksheet(sheet_name)
+    except Exception:
+        return spreadsheet.add_worksheet(title=sheet_name, rows=1000, cols=30)
+
+
+def _ensure_headers(worksheet, headers: list[str]) -> None:
+    if not worksheet.row_values(1):
+        worksheet.append_row(["Timestamp"] + headers)
+
+
+def append_record(form_name: str, category: str, fields: dict[str, str], access_token: str | None = None) -> str:
+    del form_name
+    client = _get_client(access_token)
+    worksheet = _get_or_create_worksheet(client, SPREADSHEET_NAME, category)
+    _ensure_headers(worksheet, list(fields.keys()))
+    row = [datetime.now().strftime("%d-%m-%Y %H:%M")] + list(fields.values())
+    worksheet.append_row(row, value_input_option="USER_ENTERED")
+    return worksheet.url

@@ -1,0 +1,15 @@
+{
+  "id": "field_inspection",
+  "name": "Field inspection",
+  "category": "Operations",
+  "language": "hi-IN",
+  "fields": [
+    {"name": "Inspector name", "type": "text", "required": true},
+    {"name": "Location", "type": "text", "required": true},
+    {"name": "Asset ID", "type": "text", "required": false},
+    {"name": "Condition", "type": "textarea", "required": true, "hint": "Describe the current state"},
+    {"name": "Action needed", "type": "textarea", "required": false},
+    {"name": "Date", "type": "date", "required": true}
+  ]
+}
+
