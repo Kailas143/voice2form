@@ -64,3 +64,34 @@ export function getSheetsUrl() {
   return import.meta.env.VITE_SHEETS_URL || "";
 }
 
+export async function saveToken(token) {
+  const response = await fetch(`${API_BASE_URL}/api/auth/token`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ token })
+  });
+  return parseResponse(response, "Could not save token.");
+}
+
+export async function fetchToken() {
+  const response = await fetch(`${API_BASE_URL}/api/auth/token`);
+  if (!response.ok) return null;
+  return parseResponse(response, "Could not fetch token.");
+}
+
+export async function saveCustomTemplateApi(template) {
+  const response = await fetch(`${API_BASE_URL}/api/templates/custom`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(template)
+  });
+  return parseResponse(response, "Could not save custom template.");
+}
+
+export async function deleteCustomTemplateApi(templateId) {
+  const response = await fetch(`${API_BASE_URL}/api/templates/custom/${templateId}`, {
+    method: "DELETE"
+  });
+  return parseResponse(response, "Could not delete custom template.");
+}
+

@@ -1,8 +1,7 @@
 export const STEPS = [
-  { id: 1, title: "Template" },
-  { id: 2, title: "Audio" },
-  { id: 3, title: "Verify" },
-  { id: 4, title: "Done" }
+  { id: 1, title: "Select Template" },
+  { id: 2, title: "Capture Voice" },
+  { id: 3, title: "Review & Export" }
 ];
 
 export const LANGUAGES = [
@@ -22,10 +21,12 @@ export const PROCESS_STAGES = [
 ];
 
 export const CATEGORY_ICONS = {
-  Service: "SV",
-  Sales: "SL",
-  Healthcare: "HC",
-  Operations: "OP",
-  Custom: "CU"
+  Service: "🔧",
+  Sales: "💰",
+  Healthcare: "🏥",
+  Operations: "🏢",
+  Complaint: "📋",
+  Custom: "📄",
+  Saved: "💾"
 };
 

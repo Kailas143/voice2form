@@ -1,4 +1,9 @@
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, UploadFile, Depends
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.future import select
+from pydantic import BaseModel
+
+from database import init_db, get_db, DbCustomTemplate, DbTokenStore
 from fastapi.middleware.cors import CORSMiddleware
 
 from config import DEFAULT_LANGUAGE, SUPPORTED_LANGUAGES
@@ -21,7 +26,58 @@ app.add_middleware(
 )
 
 
-def _resolve_template(template_id: str | None, raw_template: str | None) -> Template:
+@app.on_event("startup")
+async def on_startup():
+    await init_db()
+
+class TokenRequest(BaseModel):
+    token: str
+
+@app.post("/api/auth/token")
+async def save_token(req: TokenRequest, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(DbTokenStore).where(DbTokenStore.key == "google_token"))
+    store = result.scalars().first()
+    if store:
+        store.token = req.token
+    else:
+        store = DbTokenStore(key="google_token", token=req.token)
+        db.add(store)
+    await db.commit()
+    return {"status": "saved"}
+
+@app.get("/api/auth/token")
+async def get_token(db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(DbTokenStore).where(DbTokenStore.key == "google_token"))
+    store = result.scalars().first()
+    if store:
+        return {"token": store.token}
+    raise HTTPException(status_code=404, detail="Token not found")
+
+@app.post("/api/templates/custom")
+async def save_custom_template(template: Template, db: AsyncSession = Depends(get_db)):
+    fields_list = [f.model_dump() for f in template.fields]
+    db_template = DbCustomTemplate(
+        id=template.id,
+        name=template.name,
+        category="Saved",
+        source="custom",
+        fields_data=fields_list
+    )
+    db.add(db_template)
+    await db.commit()
+    return {"status": "saved"}
+
+@app.delete("/api/templates/custom/{template_id}")
+async def delete_custom_template(template_id: str, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(DbCustomTemplate).where(DbCustomTemplate.id == template_id))
+    db_template = result.scalars().first()
+    if db_template:
+        await db.delete(db_template)
+        await db.commit()
+    return {"status": "deleted"}
+
+
+async def _resolve_template(template_id: str | None, raw_template: str | None, db: AsyncSession) -> Template:
     if raw_template:
         try:
             return parse_uploaded_template_json(raw_template)
@@ -32,14 +88,31 @@ def _resolve_template(template_id: str | None, raw_template: str | None) -> Temp
         raise HTTPException(status_code=400, detail="Template selection is required.")
 
     template = get_template(template_id)
-    if template is None:
-        raise HTTPException(status_code=404, detail="Template not found")
-    return template
+    if template is not None:
+        return template
+        
+    result = await db.execute(select(DbCustomTemplate).where(DbCustomTemplate.id == template_id))
+    db_template = result.scalars().first()
+    if db_template:
+        return Template(id=db_template.id, name=db_template.name, category=db_template.category, source=db_template.source, fields=db_template.fields_data)
+
+    raise HTTPException(status_code=404, detail="Template not found")
 
 
 @app.get("/api/templates")
-def get_templates():
-    return list_templates()
+async def get_templates(db: AsyncSession = Depends(get_db)):
+    builtins = list_templates()
+    result = await db.execute(select(DbCustomTemplate))
+    customs = result.scalars().all()
+    
+    if customs:
+        saved = []
+        for c in customs:
+            t = Template(id=c.id, name=c.name, category=c.category, source=c.source, fields=c.fields_data)
+            saved.append(t)
+        builtins["Saved"] = saved
+        
+    return builtins
 
 
 @app.post("/api/template/upload")
@@ -57,8 +130,9 @@ async def transcribe_and_extract(
     template_id: str | None = Form(default=None),
     template: str | None = Form(default=None),
     language: str = Form(DEFAULT_LANGUAGE),
+    db: AsyncSession = Depends(get_db),
 ):
-    template_data = _resolve_template(template_id, template)
+    template_data = await _resolve_template(template_id, template, db)
     selected_language = validate_language(language, SUPPORTED_LANGUAGES)
 
     audio_bytes = await audio.read()
@@ -129,8 +203,8 @@ async def transcribe_and_extract(
 
 
 @app.post("/api/submit")
-def submit_form(payload: SubmitPayload):
-    template_data = payload.template or _resolve_template(payload.template_id, None)
+async def submit_form(payload: SubmitPayload, db: AsyncSession = Depends(get_db)):
+    template_data = payload.template or await _resolve_template(payload.template_id, None, db)
     sheet_category = template_data.category if payload.template is None else "Custom"
 
     missing_required = [

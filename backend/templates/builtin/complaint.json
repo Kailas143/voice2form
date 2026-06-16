@@ -1,14 +1,14 @@
 {
   "id": "complaint",
   "name": "Complaint form",
-  "category": "Service",
+  "category": "Complaint",
   "language": "hi-IN",
   "fields": [
-    {"name": "Customer name", "type": "text", "required": true, "hint": "Full name of the customer"},
-    {"name": "Phone number", "type": "phone", "required": true, "hint": "10-digit mobile number"},
+    {"name": "Name", "type": "text", "required": true, "hint": "Full name"},
+    {"name": "Phone", "type": "phone", "required": true, "hint": "10-digit mobile number"},
     {"name": "Address", "type": "text", "required": true, "hint": "Full address with flat/area"},
-    {"name": "Issue", "type": "textarea", "required": true, "hint": "Describe the problem"},
-    {"name": "Preferred date", "type": "date", "required": false, "hint": "When to visit"}
+    {"name": "Complaint", "type": "textarea", "required": true, "hint": "Describe the problem"},
+    {"name": "Priority", "type": "text", "required": false, "hint": "High / Medium / Low"}
   ]
 }
 

@@ -6,6 +6,7 @@ load_dotenv(dotenv_path=env_path)
 
 SARVAM_API_KEY = os.getenv("SARVAM_API_KEY", "")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
+DATABASE_URL = os.getenv("DATABASE_URL", "")
 GOOGLE_OAUTH_CREDENTIALS_PATH = os.getenv(
     "GOOGLE_OAUTH_CREDENTIALS_PATH", 
     os.path.join(os.path.dirname(__file__), "..", "client_secret_174819089028-8j35h9rm02uddbpgppsgsgk8i8vqc7k0.apps.googleusercontent.com.json")
