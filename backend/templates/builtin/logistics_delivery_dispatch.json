@@ -1,0 +1,14 @@
+{
+  "id": "logistics_delivery_dispatch",
+  "name": "Delivery dispatch",
+  "category": "Logistics",
+  "language": "en-IN",
+  "fields": [
+    {"name": "Dispatcher name", "type": "text", "required": true},
+    {"name": "Phone", "type": "phone", "required": true},
+    {"name": "Vehicle ID", "type": "text", "required": true},
+    {"name": "Pickup location", "type": "text", "required": true},
+    {"name": "Drop location", "type": "text", "required": true},
+    {"name": "Delivery date", "type": "date", "required": false}
+  ]
+}

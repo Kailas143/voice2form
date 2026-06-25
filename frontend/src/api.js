@@ -3,7 +3,9 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000
 async function parseResponse(response, fallbackMessage) {
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) {
-    throw new Error(payload.detail || fallbackMessage);
+    const error = new Error(payload.detail || fallbackMessage);
+    error.status = response.status;
+    throw error;
   }
   return payload;
 }
@@ -42,11 +44,12 @@ export async function transcribeAudio({ audioFile, templateId, template, languag
   return parseResponse(response, "Could not transcribe audio. Please try again.");
 }
 
-export async function submitRecord({ templateId, template, fields, language, accessToken, targetSheetUrl }) {
+export async function submitRecord({ templateId, template, fields, language, accessToken, targetSheetUrl, submissionSource, sessionToken }) {
   const response = await fetch(`${API_BASE_URL}/api/submit`, {
     method: "POST",
     headers: {
-      "Content-Type": "application/json"
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${sessionToken}`
     },
     body: JSON.stringify({
       template_id: templateId,
@@ -54,15 +57,14 @@ export async function submitRecord({ templateId, template, fields, language, acc
       fields,
       language,
       access_token: accessToken,
-      target_sheet_url: targetSheetUrl
+      target_sheet_url: targetSheetUrl,
+      submission_source: submissionSource
     })
   });
   return parseResponse(response, "Could not save record. Contact support.");
 }
 
-export function getSheetsUrl() {
-  return import.meta.env.VITE_SHEETS_URL || "";
-}
+
 
 export async function saveToken(token) {
   const response = await fetch(`${API_BASE_URL}/api/auth/token`, {
@@ -79,19 +81,149 @@ export async function fetchToken() {
   return parseResponse(response, "Could not fetch token.");
 }
 
-export async function saveCustomTemplateApi(template) {
-  const response = await fetch(`${API_BASE_URL}/api/templates/custom`, {
+export async function manualSignup({ name, email, password }) {
+  const response = await fetch(`${API_BASE_URL}/api/auth/manual/signup`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name, email, password })
+  });
+  return parseResponse(response, "Could not create account.");
+}
+
+export async function manualLogin({ email, password }) {
+  const response = await fetch(`${API_BASE_URL}/api/auth/manual/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email, password })
+  });
+  return parseResponse(response, "Could not log in.");
+}
+
+export async function googleLogin({ name, email, avatar }) {
+  const response = await fetch(`${API_BASE_URL}/api/auth/google/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name, email, avatar })
+  });
+  return parseResponse(response, "Could not log in with Google.");
+}
+
+export async function fetchAuthMe(sessionToken) {
+  const response = await fetch(`${API_BASE_URL}/api/auth/me`, {
+    headers: {
+      Authorization: `Bearer ${sessionToken}`
+    }
+  });
+  return parseResponse(response, "Could not load your session.");
+}
+
+export async function forgotPassword(email) {
+  const response = await fetch(`${API_BASE_URL}/api/auth/forgot-password`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email })
+  });
+  return parseResponse(response, "Could not start password reset.");
+}
+
+export async function resetPassword({ resetToken, newPassword }) {
+  const response = await fetch(`${API_BASE_URL}/api/auth/reset-password`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ reset_token: resetToken, new_password: newPassword })
+  });
+  return parseResponse(response, "Could not reset password.");
+}
+
+export async function saveCustomTemplateApi(template, sessionToken) {
+  const response = await fetch(`${API_BASE_URL}/api/templates/custom`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${sessionToken}`
+    },
     body: JSON.stringify(template)
   });
   return parseResponse(response, "Could not save custom template.");
 }
 
-export async function deleteCustomTemplateApi(templateId) {
+export async function deleteCustomTemplateApi(templateId, sessionToken) {
   const response = await fetch(`${API_BASE_URL}/api/templates/custom/${templateId}`, {
-    method: "DELETE"
+    method: "DELETE",
+    headers: {
+      Authorization: `Bearer ${sessionToken}`
+    }
   });
   return parseResponse(response, "Could not delete custom template.");
 }
 
+export async function fetchRecentRecords(sessionToken) {
+  const response = await fetch(`${API_BASE_URL}/api/records`, {
+    headers: {
+      Authorization: `Bearer ${sessionToken}`
+    }
+  });
+  return parseResponse(response, "Could not fetch recent records.");
+}
+
+export async function fetchWorkspaces(sessionToken) {
+  const response = await fetch(`${API_BASE_URL}/api/workspaces`, {
+    headers: {
+      Authorization: `Bearer ${sessionToken}`
+    }
+  });
+  return parseResponse(response, "Could not fetch workspaces.");
+}
+
+export async function createWorkspaceApi(payload, sessionToken) {
+  const response = await fetch(`${API_BASE_URL}/api/workspaces`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${sessionToken}`
+    },
+    body: JSON.stringify(payload)
+  });
+  return parseResponse(response, "Could not create workspace.");
+}
+
+export async function getWorkspaceApi(workspaceId, sessionToken) {
+  const response = await fetch(`${API_BASE_URL}/api/workspaces/${workspaceId}`, {
+    headers: {
+      Authorization: `Bearer ${sessionToken}`
+    }
+  });
+  return parseResponse(response, "Could not open workspace.");
+}
+
+export async function updateWorkspaceApi(workspaceId, payload, sessionToken) {
+  const response = await fetch(`${API_BASE_URL}/api/workspaces/${workspaceId}`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${sessionToken}`
+    },
+    body: JSON.stringify(payload)
+  });
+  return parseResponse(response, "Could not update workspace settings.");
+}
+
+export async function deleteWorkspaceApi(workspaceId, sessionToken) {
+  const response = await fetch(`${API_BASE_URL}/api/workspaces/${workspaceId}`, {
+    method: "DELETE",
+    headers: {
+      Authorization: `Bearer ${sessionToken}`
+    }
+  });
+  return parseResponse(response, "Could not delete workspace.");
+}
+
+export async function cleanupDuplicateWorkspacesApi(sessionToken) {
+  const response = await fetch(`${API_BASE_URL}/api/workspaces/cleanup-duplicates`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${sessionToken}`
+    }
+  });
+  return parseResponse(response, "Could not clean up duplicate workspaces.");
+}

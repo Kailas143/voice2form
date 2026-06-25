@@ -1,0 +1,14 @@
+{
+  "id": "education_student_admission",
+  "name": "Student admission",
+  "category": "Education",
+  "language": "en-IN",
+  "fields": [
+    {"name": "Student name", "type": "text", "required": true},
+    {"name": "Parent phone", "type": "phone", "required": true},
+    {"name": "Grade", "type": "text", "required": true},
+    {"name": "School name", "type": "text", "required": false},
+    {"name": "Program", "type": "text", "required": true},
+    {"name": "Notes", "type": "textarea", "required": false}
+  ]
+}

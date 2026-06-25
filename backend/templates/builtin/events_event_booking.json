@@ -1,0 +1,14 @@
+{
+  "id": "events_event_booking",
+  "name": "Event booking",
+  "category": "Events",
+  "language": "en-IN",
+  "fields": [
+    {"name": "Organizer name", "type": "text", "required": true},
+    {"name": "Phone", "type": "phone", "required": true},
+    {"name": "Event type", "type": "text", "required": true},
+    {"name": "Venue", "type": "text", "required": true},
+    {"name": "Event date", "type": "date", "required": true},
+    {"name": "Attendee count", "type": "number", "required": false}
+  ]
+}

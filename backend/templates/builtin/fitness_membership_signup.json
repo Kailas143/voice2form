@@ -1,0 +1,14 @@
+{
+  "id": "fitness_membership_signup",
+  "name": "Membership signup",
+  "category": "Fitness",
+  "language": "en-IN",
+  "fields": [
+    {"name": "Member name", "type": "text", "required": true},
+    {"name": "Phone", "type": "phone", "required": true},
+    {"name": "Email", "type": "email", "required": false},
+    {"name": "Plan", "type": "text", "required": true},
+    {"name": "Start date", "type": "date", "required": true},
+    {"name": "Goal", "type": "textarea", "required": false}
+  ]
+}

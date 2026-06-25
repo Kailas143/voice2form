@@ -1,0 +1,14 @@
+{
+  "id": "hospitality_guest_checkin",
+  "name": "Guest check-in",
+  "category": "Hospitality",
+  "language": "en-IN",
+  "fields": [
+    {"name": "Guest name", "type": "text", "required": true},
+    {"name": "Phone", "type": "phone", "required": true},
+    {"name": "Check-in date", "type": "date", "required": true},
+    {"name": "Room preference", "type": "text", "required": false},
+    {"name": "ID number", "type": "text", "required": true},
+    {"name": "Special requests", "type": "textarea", "required": false}
+  ]
+}

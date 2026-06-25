@@ -13,12 +13,12 @@ from models import Field, Template
 VALID_FIELD_TYPES = {"text", "phone", "email", "date", "number", "textarea"}
 
 
-def parse_template_content(content: bytes, filename: str) -> Template:
+def parse_template_content(content: bytes, filename: str) -> tuple[Template, dict | None, int | None]:
     suffix = Path(filename).suffix.lower()
     if suffix == ".json":
-        return _parse_json_template(content)
+        return _parse_json_template(content), None, None
     if suffix == ".csv":
-        return _parse_csv_template(content, filename)
+        return _parse_csv_template(content, filename), None, None
     if suffix == ".pdf":
         return _parse_pdf_template(content, filename)
     if suffix == ".docx":
@@ -40,6 +40,7 @@ def _parse_json_template(content: bytes) -> Template:
         id=_slugify(form_name),
         name=form_name,
         category=category,
+        source="custom",
         language="hi-IN",
         fields=fields,
     )
@@ -71,12 +72,13 @@ def _parse_csv_template(content: bytes, filename: str) -> Template:
         id=_slugify(form_name),
         name=form_name.title(),
         category="Custom",
+        source="custom",
         language="hi-IN",
         fields=_normalize_fields(fields_payload),
     )
 
 
-def _parse_pdf_template(content: bytes, filename: str) -> Template:
+def _parse_pdf_template(content: bytes, filename: str) -> tuple[Template, dict | None, int | None]:
     try:
         import pypdf
         reader = pypdf.PdfReader(BytesIO(content))
@@ -84,14 +86,14 @@ def _parse_pdf_template(content: bytes, filename: str) -> Template:
     except Exception as exc:
         raise ValueError("Could not read your PDF file. Check the format.") from exc
 
-    extracted = extract_template_from_text(text, filename)
+    extracted, usage, latency = extract_template_from_text(text, filename)
     if not extracted:
         raise ValueError("Could not extract form template from this PDF. Try uploading a JSON or CSV.")
     
-    return _json_to_template(extracted, filename)
+    return _json_to_template(extracted, filename), usage, latency
 
 
-def _parse_docx_template(content: bytes, filename: str) -> Template:
+def _parse_docx_template(content: bytes, filename: str) -> tuple[Template, dict | None, int | None]:
     try:
         import docx
         doc = docx.Document(BytesIO(content))
@@ -99,11 +101,11 @@ def _parse_docx_template(content: bytes, filename: str) -> Template:
     except Exception as exc:
         raise ValueError("Could not read your DOCX file. Check the format.") from exc
 
-    extracted = extract_template_from_text(text, filename)
+    extracted, usage, latency = extract_template_from_text(text, filename)
     if not extracted:
         raise ValueError("Could not extract form template from this DOCX. Try uploading a JSON or CSV.")
     
-    return _json_to_template(extracted, filename)
+    return _json_to_template(extracted, filename), usage, latency
 
 
 def _json_to_template(payload: dict, filename: str) -> Template:
@@ -115,6 +117,7 @@ def _json_to_template(payload: dict, filename: str) -> Template:
         id=_slugify(form_name),
         name=form_name,
         category=category,
+        source="custom",
         language="hi-IN",
         fields=fields,
     )

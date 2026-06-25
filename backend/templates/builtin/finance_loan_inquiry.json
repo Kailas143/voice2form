@@ -1,0 +1,14 @@
+{
+  "id": "finance_loan_inquiry",
+  "name": "Loan inquiry",
+  "category": "Finance",
+  "language": "en-IN",
+  "fields": [
+    {"name": "Applicant name", "type": "text", "required": true},
+    {"name": "Phone number", "type": "phone", "required": true},
+    {"name": "Email", "type": "email", "required": false},
+    {"name": "Loan amount", "type": "number", "required": true},
+    {"name": "Purpose", "type": "textarea", "required": true},
+    {"name": "Timeline", "type": "text", "required": false}
+  ]
+}

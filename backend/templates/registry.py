@@ -1,5 +1,4 @@
 import json
-from functools import lru_cache
 from pathlib import Path
 
 from models import Template
@@ -8,7 +7,6 @@ from utils.template_parser import parse_template_content
 TEMPLATES_DIR = Path(__file__).resolve().parent / "builtin"
 
 
-@lru_cache(maxsize=1)
 def _load_templates() -> list[Template]:
     templates: list[Template] = []
     for path in sorted(TEMPLATES_DIR.glob("*.json")):
@@ -31,7 +29,7 @@ def get_template(template_id: str) -> Template | None:
     return None
 
 
-def parse_uploaded_template(content: bytes, filename: str) -> Template:
+def parse_uploaded_template(content: bytes, filename: str) -> tuple[Template, dict | None, int | None]:
     return parse_template_content(content, filename)
 
 

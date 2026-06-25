@@ -41,9 +41,11 @@ def _get_or_create_worksheet(client, spreadsheet_name: str, sheet_name: str, tar
             spreadsheet = client.create(spreadsheet_name)
 
     try:
-        return spreadsheet.worksheet(sheet_name)
+        worksheet = spreadsheet.worksheet(sheet_name)
     except Exception:
-        return spreadsheet.add_worksheet(title=sheet_name, rows=1000, cols=30)
+        worksheet = spreadsheet.add_worksheet(title=sheet_name, rows=1000, cols=30)
+
+    return spreadsheet, worksheet
 
 
 def _ensure_headers(worksheet, headers: list[str]) -> None:
@@ -54,8 +56,14 @@ def _ensure_headers(worksheet, headers: list[str]) -> None:
 def append_record(form_name: str, category: str, fields: dict[str, str], access_token: str | None = None, target_sheet_url: str | None = None) -> str:
     del form_name
     client = _get_client(access_token)
-    worksheet = _get_or_create_worksheet(client, SPREADSHEET_NAME, category, target_sheet_url)
-    _ensure_headers(worksheet, list(fields.keys()))
-    row = [datetime.now().strftime("%d-%m-%Y %H:%M")] + list(fields.values())
-    worksheet.append_row(row, value_input_option="USER_ENTERED")
-    return worksheet.url
+    try:
+        spreadsheet, worksheet = _get_or_create_worksheet(client, SPREADSHEET_NAME, category, target_sheet_url)
+        _ensure_headers(worksheet, list(fields.keys()))
+        row = [datetime.now().strftime("%d-%m-%Y %H:%M")] + list(fields.values())
+        worksheet.append_row(row, value_input_option="USER_ENTERED")
+        return spreadsheet.url
+    except Exception as exc:
+        error_msg = str(exc).lower()
+        if "refresh" in error_msg or "credentials" in error_msg or "token" in error_msg:
+            raise RuntimeError(f"Google access token expired or invalid. Please reconnect. Error: {exc}") from exc
+        raise RuntimeError(f"Failed to append record to Google Sheets. Error: {exc}") from exc

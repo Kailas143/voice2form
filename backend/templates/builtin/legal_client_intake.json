@@ -1,0 +1,14 @@
+{
+  "id": "legal_client_intake",
+  "name": "Client intake",
+  "category": "Legal",
+  "language": "en-IN",
+  "fields": [
+    {"name": "Client name", "type": "text", "required": true},
+    {"name": "Phone", "type": "phone", "required": true},
+    {"name": "Email", "type": "email", "required": false},
+    {"name": "Case type", "type": "text", "required": true},
+    {"name": "Issue summary", "type": "textarea", "required": true},
+    {"name": "Next hearing date", "type": "date", "required": false}
+  ]
+}

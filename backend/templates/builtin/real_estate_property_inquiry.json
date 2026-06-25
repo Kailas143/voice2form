@@ -1,0 +1,14 @@
+{
+  "id": "real_estate_property_inquiry",
+  "name": "Property inquiry",
+  "category": "Real Estate",
+  "language": "en-IN",
+  "fields": [
+    {"name": "Buyer name", "type": "text", "required": true},
+    {"name": "Phone", "type": "phone", "required": true},
+    {"name": "Property type", "type": "text", "required": true},
+    {"name": "Budget", "type": "text", "required": true},
+    {"name": "Preferred location", "type": "text", "required": false},
+    {"name": "Move-in date", "type": "date", "required": false}
+  ]
+}

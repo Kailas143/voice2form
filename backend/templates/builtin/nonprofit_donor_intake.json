@@ -1,0 +1,14 @@
+{
+  "id": "nonprofit_donor_intake",
+  "name": "Donor intake",
+  "category": "Nonprofit",
+  "language": "en-IN",
+  "fields": [
+    {"name": "Donor name", "type": "text", "required": true},
+    {"name": "Phone", "type": "phone", "required": true},
+    {"name": "Email", "type": "email", "required": false},
+    {"name": "Donation amount", "type": "number", "required": true},
+    {"name": "Cause", "type": "textarea", "required": true},
+    {"name": "Receipt name", "type": "text", "required": false}
+  ]
+}

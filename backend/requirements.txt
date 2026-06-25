@@ -1,11 +1,14 @@
 fastapi
 gspread
 google-auth
-google-generativeai
+google-genai
 pydantic
 python-dotenv
 python-multipart
 requests
+sarvamai
 uvicorn
 pypdf
 python-docx
+PyJWT
+websockets==16.0

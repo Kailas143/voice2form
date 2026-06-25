@@ -1,0 +1,14 @@
+{
+  "id": "food_beverage_order",
+  "name": "Order capture",
+  "category": "Food & Beverage",
+  "language": "en-IN",
+  "fields": [
+    {"name": "Customer name", "type": "text", "required": true},
+    {"name": "Phone", "type": "phone", "required": true},
+    {"name": "Order items", "type": "textarea", "required": true},
+    {"name": "Delivery address", "type": "textarea", "required": true},
+    {"name": "Delivery time", "type": "text", "required": false},
+    {"name": "Notes", "type": "textarea", "required": false}
+  ]
+}

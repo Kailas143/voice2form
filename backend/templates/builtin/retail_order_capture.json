@@ -1,0 +1,14 @@
+{
+  "id": "retail_order_capture",
+  "name": "Order capture",
+  "category": "Retail",
+  "language": "en-IN",
+  "fields": [
+    {"name": "Customer name", "type": "text", "required": true},
+    {"name": "Mobile", "type": "phone", "required": true},
+    {"name": "Email", "type": "email", "required": false},
+    {"name": "Product", "type": "text", "required": true},
+    {"name": "Quantity", "type": "number", "required": true},
+    {"name": "Delivery address", "type": "textarea", "required": true}
+  ]
+}

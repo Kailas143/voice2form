@@ -1,0 +1,14 @@
+{
+  "id": "recruitment_candidate_screening",
+  "name": "Candidate screening",
+  "category": "Recruitment",
+  "language": "en-IN",
+  "fields": [
+    {"name": "Candidate name", "type": "text", "required": true},
+    {"name": "Phone", "type": "phone", "required": true},
+    {"name": "Email", "type": "email", "required": false},
+    {"name": "Role applied", "type": "text", "required": true},
+    {"name": "Experience", "type": "text", "required": true},
+    {"name": "Interview date", "type": "date", "required": false}
+  ]
+}

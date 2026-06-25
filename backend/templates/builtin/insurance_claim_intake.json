@@ -1,0 +1,14 @@
+{
+  "id": "insurance_claim_intake",
+  "name": "Claim intake",
+  "category": "Insurance",
+  "language": "en-IN",
+  "fields": [
+    {"name": "Policyholder name", "type": "text", "required": true},
+    {"name": "Phone", "type": "phone", "required": true},
+    {"name": "Policy number", "type": "text", "required": true},
+    {"name": "Claim type", "type": "text", "required": true},
+    {"name": "Incident date", "type": "date", "required": true},
+    {"name": "Summary", "type": "textarea", "required": false}
+  ]
+}

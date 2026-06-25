@@ -1,0 +1,14 @@
+{
+  "id": "software_bug_report",
+  "name": "Bug report",
+  "category": "Software",
+  "language": "en-IN",
+  "fields": [
+    {"name": "Reporter name", "type": "text", "required": true},
+    {"name": "Email", "type": "email", "required": true},
+    {"name": "App module", "type": "text", "required": true},
+    {"name": "Bug summary", "type": "textarea", "required": true},
+    {"name": "Severity", "type": "text", "required": true},
+    {"name": "Steps to reproduce", "type": "textarea", "required": false}
+  ]
+}

@@ -1,0 +1,14 @@
+{
+  "id": "travel_trip_booking",
+  "name": "Trip booking",
+  "category": "Travel",
+  "language": "en-IN",
+  "fields": [
+    {"name": "Traveler name", "type": "text", "required": true},
+    {"name": "Phone", "type": "phone", "required": true},
+    {"name": "Destination", "type": "text", "required": true},
+    {"name": "Travel date", "type": "date", "required": true},
+    {"name": "Number of travelers", "type": "number", "required": true},
+    {"name": "Notes", "type": "textarea", "required": false}
+  ]
+}

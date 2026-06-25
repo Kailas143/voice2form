@@ -6,6 +6,7 @@ load_dotenv(dotenv_path=env_path)
 
 SARVAM_API_KEY = os.getenv("SARVAM_API_KEY", "")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
+DEEPGRAM_API_KEY = os.getenv("DEEPGRAM_API_KEY", "")
 DATABASE_URL = os.getenv("DATABASE_URL", "")
 GOOGLE_OAUTH_CREDENTIALS_PATH = os.getenv(
     "GOOGLE_OAUTH_CREDENTIALS_PATH", 
@@ -18,6 +19,10 @@ GOOGLE_OAUTH_AUTHORIZED_USER_PATH = os.getenv(
 SPREADSHEET_NAME = os.getenv("SPREADSHEET_NAME", "Voice2Form Records")
 MAX_AUDIO_MB = int(os.getenv("MAX_AUDIO_MB", "50"))
 DEFAULT_LANGUAGE = os.getenv("DEFAULT_LANGUAGE", "hi-IN")
+JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "change-this-to-a-secure-secret-in-production-for-jwt-signing")
+JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
+JWT_EXPIRE_MINUTES = int(os.getenv("JWT_EXPIRE_MINUTES", "43200"))
+PASSWORD_RESET_EXPIRE_MINUTES = int(os.getenv("PASSWORD_RESET_EXPIRE_MINUTES", "30"))
 
 ALLOWED_AUDIO_TYPES = {
     "audio/wav",

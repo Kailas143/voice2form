@@ -1,0 +1,14 @@
+{
+  "id": "construction_site_report",
+  "name": "Site report",
+  "category": "Construction",
+  "language": "en-IN",
+  "fields": [
+    {"name": "Engineer name", "type": "text", "required": true},
+    {"name": "Phone", "type": "phone", "required": true},
+    {"name": "Site location", "type": "text", "required": true},
+    {"name": "Report date", "type": "date", "required": true},
+    {"name": "Issue", "type": "textarea", "required": true},
+    {"name": "Action needed", "type": "textarea", "required": false}
+  ]
+}

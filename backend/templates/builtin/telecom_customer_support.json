@@ -1,0 +1,14 @@
+{
+  "id": "telecom_customer_support",
+  "name": "Customer support",
+  "category": "Telecom",
+  "language": "en-IN",
+  "fields": [
+    {"name": "Customer name", "type": "text", "required": true},
+    {"name": "Mobile", "type": "phone", "required": true},
+    {"name": "Account number", "type": "text", "required": false},
+    {"name": "Issue", "type": "textarea", "required": true},
+    {"name": "Preferred callback", "type": "text", "required": false},
+    {"name": "Service area", "type": "text", "required": false}
+  ]
+}

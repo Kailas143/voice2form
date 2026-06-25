@@ -1,0 +1,14 @@
+{
+  "id": "automotive_service_booking",
+  "name": "Service booking",
+  "category": "Automotive",
+  "language": "en-IN",
+  "fields": [
+    {"name": "Customer name", "type": "text", "required": true},
+    {"name": "Phone", "type": "phone", "required": true},
+    {"name": "Vehicle model", "type": "text", "required": true},
+    {"name": "Service type", "type": "text", "required": true},
+    {"name": "Preferred date", "type": "date", "required": true},
+    {"name": "Issue", "type": "textarea", "required": false}
+  ]
+}

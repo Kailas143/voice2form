@@ -1,0 +1,14 @@
+{
+  "id": "agriculture_farm_visit",
+  "name": "Farm visit",
+  "category": "Agriculture",
+  "language": "en-IN",
+  "fields": [
+    {"name": "Farmer name", "type": "text", "required": true},
+    {"name": "Phone", "type": "phone", "required": true},
+    {"name": "Crop type", "type": "text", "required": true},
+    {"name": "Field location", "type": "text", "required": true},
+    {"name": "Issue summary", "type": "textarea", "required": true},
+    {"name": "Visit date", "type": "date", "required": false}
+  ]
+}

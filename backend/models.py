@@ -14,6 +14,7 @@ class Template(BaseModel):
     id: str
     name: str
     category: str
+    source: str = "builtin"
     language: str = "hi-IN"
     fields: list[Field]
 
@@ -29,6 +30,8 @@ class ExtractionResult(BaseModel):
     fields: dict[str, ExtractedField]
     missing: list[str]
     audio_retained: bool = False
+    llm_usage: dict | None = None
+    latency_ms: int | None = None
 
 
 class SubmitPayload(BaseModel):
@@ -38,3 +41,65 @@ class SubmitPayload(BaseModel):
     template: Template | None = None
     access_token: str | None = None
     target_sheet_url: str | None = None
+    submission_source: Literal["recording", "upload"] = "recording"
+
+
+class ManualSignupPayload(BaseModel):
+    name: str
+    email: str
+    password: str
+
+
+class ManualLoginPayload(BaseModel):
+    email: str
+    password: str
+
+
+class GoogleLoginPayload(BaseModel):
+    name: str
+    email: str
+    avatar: str | None = None
+
+
+class AuthUser(BaseModel):
+    provider: str
+    name: str
+    email: str
+    avatar: str | None = None
+
+
+class AuthResponse(BaseModel):
+    status: str
+    access_token: str
+    token_type: str = "bearer"
+    user: AuthUser
+
+
+class ForgotPasswordPayload(BaseModel):
+    email: str
+
+
+class ResetPasswordPayload(BaseModel):
+    reset_token: str
+    new_password: str
+
+
+class WorkspaceCreatePayload(BaseModel):
+    name: str | None = None
+    template_id: str | None = None
+    template: Template | None = None
+    language: str = "hi-IN"
+    sheet_sync_mode: Literal["new", "existing"] = "new"
+    target_sheet_url: str | None = None
+    extraction_rules: Literal["Standard", "Strict", "Lenient"] = "Standard"
+
+
+class WorkspaceUpdatePayload(BaseModel):
+    name: str | None = None
+    template_id: str | None = None
+    template: Template | None = None
+    language: str | None = None
+    sheet_sync_mode: Literal["new", "existing"] | None = None
+    target_sheet_url: str | None = None
+    extraction_rules: Literal["Standard", "Strict", "Lenient"] | None = None
+    is_pinned: bool | None = None

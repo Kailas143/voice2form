@@ -1,7 +1,8 @@
 export const STEPS = [
   { id: 1, title: "Select Template" },
-  { id: 2, title: "Capture Voice" },
-  { id: 3, title: "Review & Export" }
+  { id: 2, title: "Configuration" },
+  { id: 3, title: "Capture Voice" },
+  { id: 4, title: "Review & Export" }
 ];
 
 export const LANGUAGES = [
@@ -27,6 +28,26 @@ export const CATEGORY_ICONS = {
   Operations: "🏢",
   Complaint: "📋",
   Custom: "📄",
-  Saved: "💾"
+  Saved: "💾",
+  Finance: "💳",
+  Education: "🎓",
+  Legal: "⚖️",
+  "Real Estate": "🏘️",
+  Logistics: "🚚",
+  Hospitality: "🛎️",
+  Retail: "🛍️",
+  Manufacturing: "🏭",
+  Insurance: "🛡️",
+  Recruitment: "👥",
+  Events: "🎫",
+  Agriculture: "🌾",
+  Travel: "✈️",
+  Telecom: "📡",
+  Fitness: "🏋️",
+  Software: "🧩",
+  Nonprofit: "🤝",
+  Automotive: "🚗",
+  Construction: "🏗️",
+  "Food & Beverage": "🍽️"
 };
 

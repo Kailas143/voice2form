@@ -7,6 +7,35 @@ Voice2Form is a voice-driven form filling MVP with a FastAPI backend and a React
 - `backend/`: FastAPI API, template registry, audio pipeline, extraction services, Sheets sync
 - `frontend/`: React + Vite client with the 4-step Voice2Form flow
 
+## Transcription Flow
+
+```mermaid
+flowchart TD
+    A[Browser / React UI] -->|Start recording| B[getUserMedia + AudioWorklet]
+    B -->|PCM audio chunks| C[FastAPI WebSocket\n/api/stream/transcribe]
+    C -->|Forward audio stream| D[Deepgram WebSocket API]
+    D -->|Interim/final transcript text| C
+    C -->|Live transcript updates| A
+    C -->|Transcript chunk + template fields| E[Gemini extract_realtime]
+    E -->|Structured field updates| C
+    C -->|form_update messages| A
+
+    A -->|Stop recording| F[Recorded audio blob]
+    F -->|POST /api/transcribe| G[FastAPI transcription route]
+    G -->|Full recording transcription\nSarvam / Gemini / Whisper fallback| H[Transcript text]
+    H -->|Transcript + template fields| I[Gemini extract]
+    I -->|Final extracted fields| G
+    G -->|Final transcript + fields JSON| A
+```
+
+Live flow:
+- Deepgram converts streaming speech to text.
+- Gemini converts transcript text to structured form values.
+
+Stop-and-extract flow:
+- The full recorded file goes through the backend transcription pipeline.
+- Gemini performs the final full-pass field extraction before the UI is updated.
+
 ## Backend setup
 
 Create and activate the virtual environment:
@@ -28,10 +57,16 @@ Set environment variables:
 ```bash
 export SARVAM_API_KEY="your_sarvam_key"
 export GEMINI_API_KEY="your_gemini_key"
+export DEEPGRAM_API_KEY="your_deepgram_key"
+export DATABASE_URL="your_database_url"
 export GOOGLE_CREDENTIALS_JSON='{"type":"service_account"}'
 export SPREADSHEET_NAME="Voice2Form Records"
 export MAX_AUDIO_MB="50"
 export DEFAULT_LANGUAGE="hi-IN"
+export JWT_SECRET_KEY="change-this-secret"
+export JWT_ALGORITHM="HS256"
+export JWT_EXPIRE_MINUTES="43200"
+export PASSWORD_RESET_EXPIRE_MINUTES="30"
 ```
 
 Run the backend:
@@ -62,6 +97,42 @@ Run the frontend:
 npm run dev
 ```
 
+## Authentication (new)
+
+The app now includes a login gate before entering the Voice2Form flow.
+
+- Google Login stores: `name`, `email`, `avatar`
+- Manual Sign Up/Login stores: `name`, `email`, `password` (hashed + salted in DB)
+- JWT bearer session token is returned on signup/login/google auth
+- Email is globally unique and account linking is automatic:
+	- Google first, then manual signup with same email links password to same user
+	- Manual first, then Google login with same email links Google profile to same user
+
+Backend auth endpoints:
+
+```bash
+GET /api/auth/me
+POST /api/auth/google/login
+POST /api/auth/manual/signup
+POST /api/auth/manual/login
+POST /api/auth/forgot-password
+POST /api/auth/reset-password
+```
+
+Protected write endpoints (require Authorization: Bearer <jwt>):
+
+```bash
+POST /api/submit
+POST /api/templates/custom
+DELETE /api/templates/custom/{template_id}
+```
+
+Password reset notes:
+
+- `POST /api/auth/forgot-password` generates a reset token
+- Current MVP returns `reset_token` in API response (until email delivery is integrated)
+- `POST /api/auth/reset-password` accepts `reset_token` + `new_password`
+
 Build the frontend:
 
 ```bash
@@ -72,4 +143,3 @@ npm run build
 
 - Backend app import check passed from `backend/`
 - Frontend production build passed from `frontend/`
-

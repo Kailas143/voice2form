@@ -1,0 +1,14 @@
+{
+  "id": "manufacturing_production_report",
+  "name": "Production report",
+  "category": "Manufacturing",
+  "language": "en-IN",
+  "fields": [
+    {"name": "Supervisor name", "type": "text", "required": true},
+    {"name": "Shift", "type": "text", "required": true},
+    {"name": "Machine ID", "type": "text", "required": true},
+    {"name": "Output quantity", "type": "number", "required": true},
+    {"name": "Defect notes", "type": "textarea", "required": false},
+    {"name": "Date", "type": "date", "required": true}
+  ]
+}
