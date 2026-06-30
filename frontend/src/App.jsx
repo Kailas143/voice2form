@@ -2577,7 +2577,29 @@ export default function App() {
                 >
                   <span style={{ fontSize: "1.1rem" }}>⚙️</span> <span className="header-action-text">Settings</span>
                 </button>
-
+                {isSheetsReady && connectedSheetUrl ? (
+                  <a
+                    className="secondary-button"
+                    href={connectedSheetUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    title="View Synced Sheet"
+                    style={{ textDecoration: 'none', display: 'flex', alignItems: 'center' }}
+                  >
+                    <span style={{ fontSize: "1.1rem" }}>📊</span> <span className="header-action-text">View Sheet</span>
+                  </a>
+                ) : null}
+                {!isSheetsReady ? (
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    style={{ color: "var(--danger)", borderColor: "var(--danger)" }}
+                    onClick={startGoogleLogin}
+                    title="Reconnect Google Sheets"
+                  >
+                    ⚠️ Reconnect
+                  </button>
+                ) : null}
               </div>
               <div className="auth-user-chip compact-chip">
                 {authUser.avatar ? <img src={authUser.avatar} alt={authUser.name} /> : <span>{(authUser.name || "U").slice(0, 1).toUpperCase()}</span>}
@@ -2768,22 +2790,24 @@ export default function App() {
             <button type="button" className="secondary-button" onClick={() => setIsPreviewOpen(true)} disabled={workspaceFields.length === 0}>
               Review Full Record
             </button>
-            {isSheetsReady && (submitMeta?.sheet_url || connectedSheetUrl) && (
-              <a
-                className="secondary-button fade-in-up"
-                href={submitMeta?.sheet_url || connectedSheetUrl}
-                target="_blank"
-                rel="noreferrer"
-                style={{ textDecoration: 'none', display: 'flex', alignItems: 'center' }}
+
+            {!isSheetsReady ? (
+              <button
+                type="button"
+                className="secondary-button"
+                style={{ color: "var(--danger)", borderColor: "var(--danger)" }}
+                onClick={startGoogleLogin}
               >
-                View in Sheets ↗
-              </a>
-            )}
+                ⚠️ Reconnect Google
+              </button>
+            ) : null}
+
             <button
               type="button"
               className="secondary-button"
               onClick={() => handleSubmit({ stayInWorkspace: true })}
-              disabled={requiredMissing || isSubmitting || isProcessing || !transcript}
+              disabled={requiredMissing || isSubmitting || isProcessing || !transcript || !isSheetsReady}
+              title={!isSheetsReady ? "Google Sync must be connected to save" : ""}
             >
               {isSubmitting ? "Saving..." : "Save Record"}
             </button>
@@ -2791,7 +2815,8 @@ export default function App() {
               type="button"
               className="primary-button recording-primary-save"
               onClick={() => handleSubmit({ startNext: true })}
-              disabled={requiredMissing || isSubmitting || isProcessing || !transcript}
+              disabled={requiredMissing || isSubmitting || isProcessing || !transcript || !isSheetsReady}
+              title={!isSheetsReady ? "Google Sync must be connected to save" : ""}
             >
               {isSubmitting ? "Saving..." : "Save & Start Next Recording"}
             </button>
@@ -3456,15 +3481,26 @@ export default function App() {
                 <button type="button" className="secondary-button" onClick={handleExportExtractedData} disabled={!transcript || fieldValues.length === 0}>
                   Export
                 </button>
+                {!isSheetsReady ? (
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    style={{ marginLeft: "auto", color: "var(--danger)", borderColor: "var(--danger)" }}
+                    onClick={startGoogleLogin}
+                  >
+                    ⚠️ Reconnect Google
+                  </button>
+                ) : null}
                 <button
                   type="button"
                   className="primary-button pulse-hover"
-                  style={{ marginLeft: "auto" }}
+                  style={{ marginLeft: isSheetsReady ? "auto" : "0" }}
                   onClick={() => {
                     setIsPreviewOpen(false);
                     handleSubmit({ stayInWorkspace: true });
                   }}
-                  disabled={requiredMissing || isSubmitting || isProcessing || !transcript}
+                  disabled={requiredMissing || isSubmitting || isProcessing || !transcript || !isSheetsReady}
+                  title={!isSheetsReady ? "Google Sync must be connected to save" : ""}
                 >
                   {isSubmitting ? "Saving..." : "Save Record"}
                 </button>
