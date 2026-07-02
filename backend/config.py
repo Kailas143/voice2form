@@ -16,7 +16,7 @@ GOOGLE_OAUTH_AUTHORIZED_USER_PATH = os.getenv(
     "GOOGLE_OAUTH_AUTHORIZED_USER_PATH", 
     os.path.join(os.path.dirname(__file__), "..", "authorized_user.json")
 )
-SPREADSHEET_NAME = os.getenv("SPREADSHEET_NAME", "Voice2Form Records")
+SPREADSHEET_NAME = os.getenv("SPREADSHEET_NAME", "V2F Records")
 MAX_AUDIO_MB = int(os.getenv("MAX_AUDIO_MB", "50"))
 DEFAULT_LANGUAGE = os.getenv("DEFAULT_LANGUAGE", "hi-IN")
 JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "change-this-to-a-secure-secret-in-production-for-jwt-signing")

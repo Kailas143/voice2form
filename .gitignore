@@ -16,3 +16,4 @@ voice2form.code-workspace
 *.mp3
 *.wav
 *.m4a
+.vscode/
