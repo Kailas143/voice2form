@@ -211,8 +211,8 @@ def _deepgram_language_for(language: str) -> str:
         "hi-IN": "hi",
         "ta-IN": "ta",
         "te-IN": "te",
-        "ml-IN": "ml",
-        "kn-IN": "kn",
+        "ml-IN": "hi", # Deepgram does not support Malayalam, fallback to Hindi for live UI feedback
+        "kn-IN": "hi", # Deepgram does not support Kannada, fallback to Hindi for live UI feedback
     }
     return mapping.get(normalized, "en")
 

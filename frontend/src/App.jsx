@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useGoogleLogin } from "@react-oauth/google";
 
+import AuthContainer from "./components/auth/AuthContainer";
 import {
   fetchTemplates,
   submitRecord,
@@ -327,6 +328,7 @@ export default function App() {
   });
   const [step, setStep] = useState(() => parseInt(localStorage.getItem("v2f_step") || "1", 10));
   const [language, setLanguage] = useState(() => localStorage.getItem(LANGUAGE_STORAGE_KEY) || "hi-IN");
+  const [theme, setTheme] = useState(() => localStorage.getItem("v2f_theme") || "light");
   const [marketplaceTab, setMarketplaceTab] = useState("all");
   const [uploadedTemplateName, setUploadedTemplateName] = useState("");
   const [audioMode, setAudioMode] = useState("upload");
@@ -568,6 +570,11 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem(LANGUAGE_STORAGE_KEY, language);
   }, [language]);
+
+  useEffect(() => {
+    localStorage.setItem("v2f_theme", theme);
+    document.documentElement.dataset.theme = theme;
+  }, [theme]);
 
   useEffect(() => {
     if (!accessToken) {
@@ -1827,184 +1834,12 @@ export default function App() {
   return (
     <>
       {!authUser ? (
-        <div className="auth-shell fade-in-up">
-          <div className="auth-card premium-auth-card">
-            <section className="auth-form-panel">
-              <div className="auth-panel-head">
-                <div className="auth-brand auth-brand-premium" style={{ marginBottom: "16px" }}>
-                  <div className="brand-mark">V</div>
-                  <div>
-                    <strong style={{ color: "var(--text)" }}>Voice2Form</strong>
-                  </div>
-                </div>
-                <h1>
-                  {authMode === "signup"
-                    ? "Create your account"
-                    : authMode === "forgot"
-                      ? "Forgot password"
-                      : authMode === "reset"
-                        ? "Reset password"
-                        : "Get Started Now"}
-                </h1>
-                <p className="auth-copy">
-                  {authMode === "forgot"
-                    ? "Enter your email to generate a reset token."
-                    : authMode === "reset"
-                      ? "Enter the reset token and set a new password."
-                      : "Enter your credentials to access your account."}
-                </p>
-              </div>
-
-              {errorMessage ? <div className="status-banner error">{errorMessage}</div> : null}
-
-              {authMode === "login" || authMode === "signup" ? (
-                <>
-                  <button
-                    type="button"
-                    className="auth-google-btn stagger-1"
-                    onClick={handleGoogleAppAuth}
-                    disabled={isAuthLoading || isCheckingGoogleAccount}
-                  >
-                    <svg width="24" height="24" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                      <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4" />
-                      <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853" />
-                      <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05" />
-                      <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335" />
-                    </svg>
-                    {isAuthLoading || isCheckingGoogleAccount ? "Connecting..." : "Log in with Google"}
-                  </button>
-
-                  <div className="auth-divider stagger-2"><span>or</span></div>
-                </>
-              ) : null}
-
-              <form className="auth-form stagger-3" onSubmit={handleManualAuthSubmit}>
-                {authMode === "signup" ? (
-                  <label>
-                    <span>Name</span>
-                    <input
-                      type="text"
-                      value={authName}
-                      onChange={(event) => setAuthName(event.target.value)}
-                      placeholder="Your full name"
-                      required
-                    />
-                  </label>
-                ) : null}
-
-                <label>
-                  <span>Email address</span>
-                  <input
-                    type="email"
-                    value={authEmail}
-                    onChange={(event) => setAuthEmail(event.target.value)}
-                    placeholder="you@company.com"
-                    required={authMode === "login" || authMode === "signup" || authMode === "forgot"}
-                  />
-                </label>
-
-                {authMode === "reset" ? (
-                  <label>
-                    <span>Reset Token</span>
-                    <input
-                      type="text"
-                      value={resetToken}
-                      onChange={(event) => setResetToken(event.target.value)}
-                      placeholder="Paste reset token"
-                      required
-                    />
-                  </label>
-                ) : null}
-
-                {authMode !== "forgot" ? (
-                  <label>
-                    <div style={{ display: "flex", justifyContent: "space-between" }}>
-                      <span>Password</span>
-                      {authMode === "login" && (
-                        <span style={{ color: "var(--accent-strong)", cursor: "pointer" }} onClick={() => setAuthMode("forgot")}>
-                          Forgot password?
-                        </span>
-                      )}
-                    </div>
-                    <input
-                      type="password"
-                      value={authPassword}
-                      onChange={(event) => setAuthPassword(event.target.value)}
-                      placeholder={authMode === "signup" || authMode === "reset" ? "min 6 chars" : "Enter password"}
-                      minLength={6}
-                      required={authMode === "login" || authMode === "signup" || authMode === "reset"}
-                    />
-                  </label>
-                ) : null}
-
-                {resetCodeHint ? <small className="auth-reset-hint">Reset token: {resetCodeHint}</small> : null}
-
-                <button type="submit" className="primary-button auth-submit-btn stagger-4" disabled={isAuthLoading}>
-                  {isAuthLoading
-                    ? "Please wait..."
-                    : authMode === "signup"
-                      ? "Sign Up"
-                      : authMode === "forgot"
-                        ? "Send Reset Token"
-                        : authMode === "reset"
-                          ? "Reset Password"
-                          : "Login"}
-                </button>
-              </form>
-
-              <div className="auth-actions-row stagger-5" style={{ justifyContent: "center", marginTop: "16px" }}>
-                {authMode === "login" || authMode === "signup" ? (
-                  <p style={{ fontSize: "0.9rem", color: "var(--muted)", margin: 0 }}>
-                    {authMode === "signup" ? "Already have an account?" : "Don't have an account?"}
-                    <button
-                      type="button"
-                      className="ghost-button auth-switch"
-                      style={{ padding: "0 6px", color: "var(--accent-strong)", display: "inline" }}
-                      onClick={() => {
-                        setAuthMode((current) => (current === "signup" ? "login" : "signup"));
-                        setErrorMessage("");
-                        setResetCodeHint("");
-                      }}
-                    >
-                      {authMode === "signup" ? "Log in" : "Sign up"}
-                    </button>
-                  </p>
-                ) : null}
-
-                {authMode === "forgot" || authMode === "reset" ? (
-                  <button
-                    type="button"
-                    className="ghost-button auth-switch"
-                    onClick={() => {
-                      setAuthMode("login");
-                      setErrorMessage("");
-                      setResetToken("");
-                    }}
-                  >
-                    Back to login
-                  </button>
-                ) : null}
-              </div>
-            </section>
-
-            <aside className="auth-showcase">
-              <div className="showcase-content">
-                <h2>The simplest way to extract structured data</h2>
-                <p>
-                  Transform unstructured voice notes and calls into verified records in seconds.
-                </p>
-              </div>
-              <div className="showcase-mockup-wrapper">
-                <img src="/mockup.png" alt="Dashboard Mockup" className="showcase-mockup" />
-              </div>
-            </aside>
-          </div>
-        </div>
+        <AuthContainer onLoginSuccess={(user, token) => { setAuthUser(user); setSessionToken(token); localStorage.setItem("voice2form-session-token", token); }} />
       ) : step === 1 && !shouldShowWorkspaceHome && homeView === "workspaces" && workspaces.length > 0 ? (
         <div className="workspace-directory-page fade-in-up">
           <nav className="marketplace-topbar">
             <div className="brand-lockup">
-              <div className="brand-mark">V</div>
+              <img src="/small-logo.png" alt="V2F" className="w-12 h-12 object-contain logo-sound-wave" />
               <div>
                 <strong>Voice2Form</strong>
                 <span>AI-powered voice to structured data</span>
@@ -2049,10 +1884,10 @@ export default function App() {
                 </div>
               ) : workspaces.length > 0 ? (
                 <div className="workspace-directory-grid">
-                  {workspaces.map((workspace) => (
+                  {workspaces.map((workspace, index) => (
                     <article
                       key={workspace.id}
-                      className="workspace-directory-card"
+                      className={`workspace-directory-card animate-fade-up delay-${(index % 5 + 1) * 100}`}
                     >
                       <button
                         type="button"
@@ -2156,7 +1991,7 @@ export default function App() {
         <div className="marketplace-page fade-in-up">
           <nav className="marketplace-topbar">
             <div className="brand-lockup">
-              <div className="brand-mark">V</div>
+              <img src="/small-logo.png" alt="V2F" className="w-12 h-12 object-contain logo-sound-wave" />
               <div>
                 <strong>Voice2Form</strong>
                 <span>AI-powered voice to structured data</span>
@@ -2329,8 +2164,8 @@ export default function App() {
               </div>
 
               <div className="template-grid">
-                {displayedTemplates.map((template) => (
-                  <article key={template.id} className="template-market-card">
+                {displayedTemplates.map((template, index) => (
+                  <article key={template.id} className={`template-market-card animate-fade-up delay-${(index % 5 + 1) * 100}`}>
                     <div className="template-card-top">
                       <div className="template-icon">{CATEGORY_ICONS[template.category] || "▣"}</div>
                       <span className="template-badge">{template.categoryLabel || template.category}</span>
@@ -2361,7 +2196,7 @@ export default function App() {
                 ))}
 
                 <article
-                  className="template-market-card template-import-card"
+                  className={`template-market-card template-import-card animate-fade-up delay-${(displayedTemplates.length % 5 + 1) * 100}`}
                   title="Upload a PDF, DOCX, or JSON form and let Voice2Form extract fields automatically."
                 >
                   <div className="template-card-top">
@@ -2411,8 +2246,8 @@ export default function App() {
               </div>
 
               <div className="template-grid">
-                {displayedSavedTemplates.map((template) => (
-                  <article key={template.id} className="template-market-card">
+                {displayedSavedTemplates.map((template, index) => (
+                  <article key={template.id} className={`template-market-card animate-fade-up delay-${(index % 5 + 1) * 100}`}>
                     <div className="template-card-top">
                       <div className="template-icon">{CATEGORY_ICONS[template.category] || "▣"}</div>
                       <span className="template-badge">Saved</span>
@@ -2459,11 +2294,11 @@ export default function App() {
                 </div>
               </div>
               <div className="featured-strip-grid">
-                {featuredTemplates.map((template) => (
+                {featuredTemplates.map((template, index) => (
                   <button
                     key={template.id}
                     type="button"
-                    className="featured-strip-card"
+                    className={`featured-strip-card animate-fade-up delay-${(index % 5 + 1) * 100}`}
                     onClick={() => {
                       setSelectedTemplate(normalizeSelectedTemplate(template));
                       setIsTemplateModalOpen(true);
@@ -2538,73 +2373,92 @@ export default function App() {
         </div>
       ) : shouldShowWorkspaceHome && selectedTemplate ? (
         <div className="recording-workspace-shell fade-in-up">
-          <header className="recording-workspace-header">
-            <div className="recording-header-brand">
-              <div className="brand-mark">V</div>
-              <div>
-                <strong>Voice2Form</strong>
-                <span>Single-screen recording workspace</span>
+          <header className="flex items-center justify-between bg-base-100 shadow-sm hover:shadow-md transition-shadow duration-300 rounded-2xl mb-6 px-5 py-3 border border-base-200">
+            <div className="flex items-center gap-4">
+              <img src="/small-logo.png" alt="V2F" className="flex-shrink-0 w-12 h-12 object-contain logo-sound-wave" />
+              <div className="flex flex-col">
+                <h2 className="text-xl font-bold leading-tight text-base-content tracking-tight m-0">{workspaceName}</h2>
+                <div className="flex items-center gap-2 mt-1">
+                  <span className="text-sm font-medium text-base-content/70">{selectedTemplate.name}</span>
+                  <span className="badge badge-sm badge-ghost font-semibold text-xs border-base-300">{selectedTemplate.fields.length} Fields</span>
+                </div>
               </div>
             </div>
 
-            <div className="recording-header-main">
-              <div className="recording-header-title">
-                <h1>{workspaceName}</h1>
-                <p>{selectedTemplate.name}</p>
-              </div>
-              <div className="recording-header-chips">
-                <span className={`workspace-chip ${isSheetsReady ? "success" : "warning"}`}>
-                  {isSheetsReady ? "Google Sheets Connected" : "Google Sheets Ready"}
-                </span>
-                <span className="workspace-chip">{languageLabel}</span>
-                <span className="workspace-chip">{selectedTemplate.fields.length} Fields</span>
-              </div>
-            </div>
-
-            <div className="recording-header-actions">
-              <div className="recording-header-button-row">
-                <button type="button" className="ghost-button" onClick={handleBrowseTemplates} title="Browse Templates">
-                  <span style={{ fontSize: "1.1rem" }}>📋</span> <span className="header-action-text">Templates</span>
-                </button>
-                <button
-                  type="button"
-                  className="secondary-button"
-                  onClick={() => {
-                    setStep(2);
-                    setInWorkspace(false);
-                  }}
-                  title="Workspace Settings"
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2 bg-base-200/50 px-3 py-1.5 rounded-lg border border-base-300 hover:border-base-content/20 transition-colors">
+                <span className="text-xs font-semibold text-base-content/60 uppercase tracking-wider">Lang</span>
+                <select 
+                  className="bg-transparent text-sm font-medium outline-none cursor-pointer text-base-content" 
+                  value={language} 
+                  onChange={(event) => setLanguage(event.target.value)}
                 >
-                  <span style={{ fontSize: "1.1rem" }}>⚙️</span> <span className="header-action-text">Settings</span>
-                </button>
-                {isSheetsReady && connectedSheetUrl ? (
-                  <a
-                    className="secondary-button"
-                    href={connectedSheetUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    title="View Synced Sheet"
-                    style={{ textDecoration: 'none', display: 'flex', alignItems: 'center' }}
-                  >
-                    <span style={{ fontSize: "1.1rem" }}>📊</span> <span className="header-action-text">View Sheet</span>
-                  </a>
-                ) : null}
-                {!isSheetsReady ? (
-                  <button
-                    type="button"
-                    className="secondary-button"
-                    style={{ color: "var(--danger)", borderColor: "var(--danger)" }}
-                    onClick={startGoogleLogin}
-                    title="Reconnect Google Sheets"
-                  >
-                    ⚠️ Reconnect
-                  </button>
-                ) : null}
+                  {LANGUAGES.map((item) => (
+                    <option key={item.value} value={item.value}>{item.label}</option>
+                  ))}
+                </select>
               </div>
-              <div className="auth-user-chip compact-chip">
-                {authUser.avatar ? <img src={authUser.avatar} alt={authUser.name} /> : <span>{(authUser.name || "U").slice(0, 1).toUpperCase()}</span>}
-                <small className="header-action-text">{authUser.email}</small>
-                <button type="button" className="logout-btn" onClick={handleLogout} title="Logout">⏏</button>
+
+              <div className="divider divider-horizontal m-0 w-px h-6 bg-base-300 self-center"></div>
+              
+              {isSheetsReady ? (
+                <div className="tooltip tooltip-bottom tooltip-success" data-tip="Google Sheets Connected">
+                  <div className="badge badge-success badge-outline gap-1 font-medium py-3 px-3 bg-success/5 border-success/30">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+                    Connected
+                  </div>
+                </div>
+              ) : (
+                <div className="tooltip tooltip-bottom tooltip-error" data-tip="Reconnect Google Sheets to save data">
+                  <button type="button" onClick={startGoogleLogin} className="btn btn-error btn-outline btn-sm gap-1 hover:animate-pulse bg-error/5">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+                    Reconnect
+                  </button>
+                </div>
+              )}
+
+              {isSheetsReady && connectedSheetUrl && (
+                <div className="tooltip tooltip-bottom" data-tip="View Google Sheet">
+                  <a href={connectedSheetUrl} target="_blank" rel="noreferrer" className="btn btn-ghost btn-sm btn-circle hover:bg-base-200">
+                    <span className="text-lg">📊</span>
+                  </a>
+                </div>
+              )}
+              
+              <div className="tooltip tooltip-bottom" data-tip="Browse Templates">
+                <button type="button" className="btn btn-ghost btn-sm btn-circle hover:bg-base-200" onClick={handleBrowseTemplates}>
+                  <span className="text-lg">📋</span>
+                </button>
+              </div>
+
+              <div className="tooltip tooltip-bottom" data-tip="Workspace Settings">
+                <button type="button" className="btn btn-ghost btn-sm btn-circle hover:bg-base-200" onClick={() => { setStep(2); setInWorkspace(false); }}>
+                  <span className="text-lg">⚙️</span>
+                </button>
+              </div>
+
+              <div className="divider divider-horizontal m-0 w-px h-6 bg-base-300 self-center"></div>
+
+              <div className="dropdown dropdown-end">
+                <div tabIndex={0} role="button" className="btn btn-ghost btn-circle avatar placeholder hover:ring-2 hover:ring-primary/20 transition-all">
+                  <div className="bg-neutral text-neutral-content w-9 h-9 rounded-full ring-1 ring-base-300 flex items-center justify-center overflow-hidden">
+                    {authUser?.avatar ? <img src={authUser.avatar} alt="User avatar" className="w-full h-full object-cover" /> : <span className="text-sm font-semibold">{(authUser?.name || "U").slice(0, 1).toUpperCase()}</span>}
+                  </div>
+                </div>
+                <ul tabIndex={0} className="menu menu-sm dropdown-content bg-base-100 rounded-box z-[1] mt-3 w-56 p-2 shadow-xl border border-base-200 animate-scale-in origin-top-right">
+                  <li className="menu-title px-4 py-2 border-b border-base-200 mb-1">
+                    <div className="flex flex-col gap-1">
+                      <span className="font-bold text-base-content text-sm">{authUser?.name || "User"}</span>
+                      <span className="text-xs text-base-content/60 break-all">{authUser?.email}</span>
+                    </div>
+                  </li>
+                  <li>
+                    <button type="button" onClick={handleLogout} className="text-error font-medium hover:bg-error/10 flex gap-2 items-center py-2">
+                      <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
+                      Logout
+                    </button>
+                  </li>
+                </ul>
               </div>
             </div>
           </header>
@@ -2616,14 +2470,6 @@ export default function App() {
                   <h2>Voice Capture</h2>
                   <p>Record, upload, review, and save without leaving this page.</p>
                 </div>
-                <label className="language-chip">
-                  <span>Language</span>
-                  <select value={language} onChange={(event) => setLanguage(event.target.value)}>
-                    {LANGUAGES.map((item) => (
-                      <option key={item.value} value={item.value}>{item.label}</option>
-                    ))}
-                  </select>
-                </label>
               </div>
 
               <div className="recording-capture-actions">
@@ -2790,17 +2636,6 @@ export default function App() {
             <button type="button" className="secondary-button" onClick={() => setIsPreviewOpen(true)} disabled={workspaceFields.length === 0}>
               Review Full Record
             </button>
-
-            {!isSheetsReady ? (
-              <button
-                type="button"
-                className="secondary-button"
-                style={{ color: "var(--danger)", borderColor: "var(--danger)" }}
-                onClick={startGoogleLogin}
-              >
-                ⚠️ Reconnect Google
-              </button>
-            ) : null}
 
             <button
               type="button"
