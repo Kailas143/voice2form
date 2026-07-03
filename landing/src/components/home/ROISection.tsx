@@ -56,7 +56,7 @@ export default function ROISection() {
             transition={{ duration: 0.5, delay: 0.1 }}
             className="bg-primary rounded-3xl p-8 md:p-12 border border-primary text-white shadow-2xl relative overflow-hidden"
           >
-            <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-blue-600 to-transparent opacity-50 z-0"></div>
+            <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-primary to-transparent opacity-50 z-0"></div>
             
             <div className="relative z-10">
               <h4 className="text-2xl font-bold text-white mb-8 flex items-center gap-3">
@@ -73,7 +73,7 @@ export default function ROISection() {
                   "Real-time capture and availability",
                   "Automated, effortless workflow"
                 ].map((item, i) => (
-                  <li key={i} className="flex items-start gap-4 font-medium text-lg text-blue-50">
+                  <li key={i} className="flex items-start gap-4 font-medium text-lg text-white/90">
                     <Check className="text-accent mt-1 flex-shrink-0" size={20} />
                     {item}
                   </li>

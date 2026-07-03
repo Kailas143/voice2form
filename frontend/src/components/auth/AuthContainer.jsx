@@ -230,7 +230,7 @@ export default function AuthContainer({ onLoginSuccess }) {
                 <label className="label">
                   <span className="label-text font-medium">Password</span>
                   {authMode === "login" && (
-                    <span className="label-text-alt text-primary cursor-pointer hover:underline font-medium" onClick={() => setAuthMode("forgot")}>Forgot password?</span>
+                    <span className="label-text-alt text-[var(--accent)] cursor-pointer hover:underline font-medium" onClick={() => setAuthMode("forgot")}>Forgot password?</span>
                   )}
                 </label>
                 <input type="password" className="input input-bordered w-full bg-base-100" value={authPassword} onChange={(e) => setAuthPassword(e.target.value)} placeholder={authMode === "signup" || authMode === "reset" ? "min 6 chars" : "Enter password"} minLength={6} required />
@@ -243,7 +243,7 @@ export default function AuthContainer({ onLoginSuccess }) {
               </div>
             )}
 
-            <button type="submit" className="btn btn-primary w-full shadow-lg" disabled={isAuthLoading}>
+            <button type="submit" className="btn w-full shadow-lg bg-[var(--accent)] hover:bg-[var(--accent-strong)] text-white border-none" disabled={isAuthLoading}>
               {isAuthLoading ? (
                 <><span className="loading loading-spinner"></span> Please wait...</>
               ) : authMode === "signup" ? "Sign Up"
@@ -257,7 +257,7 @@ export default function AuthContainer({ onLoginSuccess }) {
             {(authMode === "login" || authMode === "signup") && (
               <p>
                 {authMode === "signup" ? "Already have an account? " : "Don't have an account? "}
-                <button type="button" className="text-primary font-bold hover:underline" onClick={() => {
+                <button type="button" className="text-[var(--accent)] font-bold hover:underline" onClick={() => {
                   setAuthMode(authMode === "signup" ? "login" : "signup");
                   setErrorMessage("");
                   setResetCodeHint("");
@@ -268,7 +268,7 @@ export default function AuthContainer({ onLoginSuccess }) {
             )}
 
             {(authMode === "forgot" || authMode === "reset") && (
-              <button type="button" className="text-primary font-bold hover:underline" onClick={() => {
+              <button type="button" className="text-[var(--accent)] font-bold hover:underline" onClick={() => {
                 setAuthMode("login");
                 setErrorMessage("");
                 setResetToken("");
@@ -280,17 +280,53 @@ export default function AuthContainer({ onLoginSuccess }) {
         </div>
         
         {/* Showcase Panel */}
-        <div className="hidden lg:flex flex-col lg:w-1/2 bg-gradient-to-br from-primary to-info text-primary-content p-12 relative overflow-hidden">
-          {/* Background decorations */}
-          <div className="absolute top-0 right-0 w-64 h-64 bg-white opacity-10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/3"></div>
-          <div className="absolute bottom-0 left-0 w-64 h-64 bg-black opacity-10 rounded-full blur-3xl translate-y-1/2 -translate-x-1/3"></div>
-          
-          <div className="relative z-10 h-full flex flex-col justify-center">
-            <h2 className="text-4xl font-extrabold mb-4 leading-tight">The simplest way to extract structured data</h2>
-            <p className="text-lg opacity-90 mb-12">Transform unstructured voice notes and calls into verified records in seconds.</p>
+        <div className="hidden lg:flex flex-col lg:w-1/2 p-4 pl-0">
+          <div 
+            className="w-full h-full bg-cover bg-center rounded-[2rem] text-white relative overflow-hidden flex flex-col items-center justify-center shadow-2xl"
+            style={{ backgroundImage: "url('/auth-bg.png')" }}
+          >
+            {/* Dark overlay for text readability */}
+            <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px]"></div>
             
-            <div className="glass rounded-2xl p-2 shadow-2xl transform rotate-2 hover:rotate-0 transition-transform duration-500">
-              <img src="/mockup.png" alt="Dashboard Mockup" className="rounded-xl w-full h-auto object-cover" />
+            <div className="relative z-10 w-full h-full flex flex-col justify-center items-center text-center p-8 pt-12">
+              {/* Floating Glass Card */}
+              <div className="w-full max-w-sm bg-white/10 backdrop-blur-2xl border border-white/20 rounded-2xl p-8 shadow-2xl mb-auto transform hover:scale-105 transition-transform duration-500 mt-4">
+                  <div className="flex items-center justify-center gap-4 mb-6">
+                      <div className="w-14 h-14 rounded-2xl bg-black/40 border border-white/10 flex items-center justify-center shadow-inner">
+                          <span className="text-2xl">🎙️</span>
+                      </div>
+                      <span className="text-white/50 text-xl">⇄</span>
+                      <div className="w-14 h-14 rounded-2xl bg-[var(--accent)] border border-white/20 flex items-center justify-center shadow-lg">
+                          <span className="text-2xl">📋</span>
+                      </div>
+                  </div>
+                  <h3 className="text-xl font-bold mb-3">Voice to CRM Sync</h3>
+                  <p className="text-white/80 text-sm mb-8 leading-relaxed">Automatically extract structured data from unstructured audio notes in real time to build a tighter feedback loop.</p>
+                  <div className="flex gap-3">
+                      <button type="button" className="flex-1 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white font-medium text-sm transition border border-white/10">How it works</button>
+                      <button type="button" className="flex-1 py-2.5 rounded-xl bg-[var(--accent)] hover:bg-[var(--accent-strong)] text-white font-medium text-sm transition shadow-lg">Allow access</button>
+                  </div>
+              </div>
+
+              {/* Bottom Text and Carousel */}
+              <div className="mt-auto pb-2">
+                  <div className="inline-block px-3 py-1 rounded-full bg-white/20 backdrop-blur-md text-[10px] font-bold uppercase tracking-wider mb-5 border border-white/10">What's New?</div>
+                  <h2 className="text-2xl md:text-3xl font-extrabold mb-4">Audio-to-Form AI 2.0</h2>
+                  <p className="text-white/80 text-sm max-w-sm mx-auto mb-10 leading-relaxed">
+                    You asked and we listened! We've added enhanced accuracy and direct integrations to speed up your workflow.
+                  </p>
+                  
+                  {/* Carousel Indicators */}
+                  <div className="flex items-center justify-center gap-6">
+                      <button type="button" className="w-8 h-8 rounded-full flex items-center justify-center text-white/50 hover:text-white hover:bg-white/10 transition">←</button>
+                      <div className="flex gap-2 items-center">
+                          <div className="w-8 h-1 rounded-full bg-white"></div>
+                          <div className="w-2 h-1 rounded-full bg-white/30"></div>
+                          <div className="w-2 h-1 rounded-full bg-white/30"></div>
+                      </div>
+                      <button type="button" className="w-8 h-8 rounded-full flex items-center justify-center text-white/50 hover:text-white hover:bg-white/10 transition">→</button>
+                  </div>
+              </div>
             </div>
           </div>
         </div>

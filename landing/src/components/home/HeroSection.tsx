@@ -118,7 +118,7 @@ export default function HeroSection() {
                   activeTab === 'upload' ? 'text-white' : 'text-slate-600 hover:text-slate-900'
                 }`}
               >
-                <UploadCloud size={16} className={activeTab === 'upload' ? 'text-blue-400' : ''} />
+                <UploadCloud size={16} className={activeTab === 'upload' ? 'text-primary' : ''} />
                 Upload Audio
               </button>
             </div>
@@ -139,7 +139,7 @@ export default function HeroSection() {
                     className="absolute inset-0 p-8"
                   >
                     <div className="flex items-center gap-3 mb-6">
-                      <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-primary">
+                      <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary">
                         <Mic size={20} className="animate-pulse" />
                       </div>
                       <div>

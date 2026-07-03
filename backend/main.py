@@ -1,4 +1,5 @@
 import os
+import uuid
 import logging
 import hashlib
 import secrets
@@ -14,10 +15,10 @@ from fastapi import FastAPI, File, Form, HTTPException, UploadFile, Depends, Web
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
-from sqlalchemy import desc, delete
+from sqlalchemy import desc, delete, func
 from pydantic import BaseModel
 
-from database import init_db, get_db, AsyncSessionLocal, DbCustomTemplate, DbTokenStore, DbUserAuth, DbRecentRecord, DbWorkspace, DbLlmLog
+from database import init_db, get_db, AsyncSessionLocal, DbCustomTemplate, DbTokenStore, DbUserAuth, DbRecentRecord, DbWorkspace, DbLlmLog, DbOrganization, DbPlan, DbOrganizationMember, OrganizationType
 from fastapi.middleware.cors import CORSMiddleware
 
 from config import (
@@ -42,8 +43,11 @@ from models import (
     ResetPasswordPayload,
     WorkspaceCreatePayload,
     WorkspaceUpdatePayload,
+    OrganizationSwitchPayload,
 )
 from services import gemini, sarvam, sheets
+from services.access import has_feature, get_limit
+from services.usage import get_or_create_usage_metric
 from templates.registry import (
     get_template,
     list_templates,
@@ -157,6 +161,88 @@ async def _get_current_user(
     return user
 
 
+def get_current_org(
+    current_user: DbUserAuth = Depends(_get_current_user),
+):
+    org_id = current_user.current_organization_id
+    if not org_id:
+        raise HTTPException(status_code=403, detail="No active organization found.")
+    return org_id
+
+def require_feature(feature_code: str):
+    async def dependency(
+        org_id: UUID = Depends(get_current_org),
+        db: AsyncSession = Depends(get_db)
+    ):
+        org = await db.execute(select(DbOrganization).where(DbOrganization.id == org_id))
+        org = org.scalars().first()
+        if not org:
+            raise HTTPException(status_code=403, detail="Active organization not found.")
+            
+        plan_id = org.current_plan_id
+        if not plan_id:
+            free_plan = await db.execute(select(DbPlan).where(DbPlan.name == "Free"))
+            free_plan = free_plan.scalars().first()
+            if free_plan:
+                plan_id = free_plan.id
+
+        if not plan_id:
+            raise HTTPException(status_code=403, detail="Organization has no billing plan.")
+
+        has_feat = await has_feature(db, plan_id, feature_code)
+        if not has_feat:
+            raise HTTPException(status_code=403, detail=f"Your plan does not include the {feature_code} feature.")
+        
+        return org_id
+    return dependency
+
+
+def require_limit(limit_key: str):
+    async def dependency(
+        org_id: UUID = Depends(get_current_org),
+        db: AsyncSession = Depends(get_db)
+    ):
+        org = await db.execute(select(DbOrganization).where(DbOrganization.id == org_id))
+        org = org.scalars().first()
+        if not org:
+            raise HTTPException(status_code=403, detail="Active organization not found.")
+            
+        plan_id = org.current_plan_id
+        if not plan_id:
+            free_plan = await db.execute(select(DbPlan).where(DbPlan.name == "Free"))
+            free_plan = free_plan.scalars().first()
+            if free_plan:
+                plan_id = free_plan.id
+
+        if not plan_id:
+            raise HTTPException(status_code=403, detail="Organization has no billing plan.")
+
+        limit = await get_limit(db, plan_id, limit_key)
+        
+        if limit is None or limit == -1:
+            return org_id
+            
+        now = datetime.now(timezone.utc)
+        metric = await get_or_create_usage_metric(db, org_id, now.month, now.year)
+        
+        usage_val = 0
+        if limit_key == "audio_minutes":
+            usage_val = metric.audio_minutes_used
+        elif limit_key == "submissions":
+            usage_val = metric.submissions_used
+        elif limit_key == "ai_requests":
+            usage_val = metric.ai_requests_used
+        elif limit_key == "forms_limit":
+            result = await db.execute(select(func.count()).select_from(DbWorkspace).where(DbWorkspace.organization_id == org_id))
+            usage_val = result.scalar() or 0
+            
+        if usage_val >= limit:
+            raise HTTPException(status_code=403, detail=f"You have reached your {limit_key} limit ({limit}). Please upgrade your plan.")
+            
+        return org_id
+    return dependency
+
+
 def _auth_response(user: DbUserAuth) -> AuthResponse:
     return AuthResponse(
         status="ok",
@@ -238,6 +324,25 @@ def _pick_record_name(fields: dict[str, str]) -> str:
     return "Anonymous"
 
 
+async def _provision_new_user_organization(user: DbUserAuth, db: AsyncSession):
+    await db.flush()
+    org = DbOrganization(
+        name=f"{user.name.split()[0]}'s Workspace",
+        organization_type=OrganizationType.PERSONAL,
+    )
+    db.add(org)
+    await db.flush()
+    
+    member = DbOrganizationMember(
+        user_id=user.id,
+        organization_id=org.id,
+        role="owner"
+    )
+    db.add(member)
+    user.current_organization_id = org.id
+
+
+
 @app.post("/api/auth/manual/signup", response_model=AuthResponse)
 async def manual_signup(payload: ManualSignupPayload, db: AsyncSession = Depends(get_db)):
     name = payload.name.strip()
@@ -280,6 +385,7 @@ async def manual_signup(payload: ManualSignupPayload, db: AsyncSession = Depends
         password_salt=salt,
     )
     db.add(user)
+    await _provision_new_user_organization(user, db)
     await db.commit()
     await db.refresh(user)
     return _auth_response(user)
@@ -336,6 +442,7 @@ async def google_login(payload: GoogleLoginPayload, db: AsyncSession = Depends(g
             password_salt=None,
         )
         db.add(user)
+        await _provision_new_user_organization(user, db)
 
     await db.commit()
     await db.refresh(user)
@@ -420,15 +527,134 @@ async def get_token(db: AsyncSession = Depends(get_db)):
         return {"token": store.token}
     return {"token": None}
 
+
+async def _get_optional_current_user(
+    credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
+    db: AsyncSession = Depends(get_db),
+) -> DbUserAuth | None:
+    if not credentials or not credentials.credentials:
+        return None
+    try:
+        payload = jwt.decode(credentials.credentials, JWT_SECRET_KEY, algorithms=[JWT_ALGORITHM])
+        email = _normalize_email(str(payload.get("sub", "")))
+        result = await db.execute(select(DbUserAuth).where(DbUserAuth.email == email))
+        return result.scalars().first()
+    except Exception:
+        return None
+
+
+def get_optional_current_org(
+    current_user: DbUserAuth | None = Depends(_get_optional_current_user),
+) -> uuid.UUID | None:
+    if current_user and current_user.current_organization_id:
+        return current_user.current_organization_id
+    return None
+
+@app.get("/api/current-organization")
+async def get_current_organization_details(
+    db: AsyncSession = Depends(get_db),
+    current_user: DbUserAuth = Depends(_get_current_user),
+):
+    if not current_user.current_organization_id:
+        raise HTTPException(status_code=404, detail="No active organization found.")
+        
+    result = await db.execute(
+        select(DbOrganization, DbOrganizationMember, DbPlan)
+        .join(DbOrganizationMember, DbOrganization.id == DbOrganizationMember.organization_id)
+        .outerjoin(DbPlan, DbOrganization.current_plan_id == DbPlan.id)
+        .where(
+            DbOrganization.id == current_user.current_organization_id,
+            DbOrganizationMember.user_id == current_user.id
+        )
+    )
+    row = result.first()
+    if not row:
+        raise HTTPException(status_code=404, detail="Organization context invalid.")
+        
+    org, member, plan = row
+    
+    # Handle Enums gracefully
+    org_type_val = org.organization_type.value if hasattr(org.organization_type, 'value') else org.organization_type
+    
+    return {
+        "id": str(org.id),
+        "name": org.name,
+        "organization_type": org_type_val,
+        "role": member.role,
+        "plan": plan.name if plan else "Free"
+    }
+
+
+@app.get("/api/organizations")
+async def list_user_organizations(
+    db: AsyncSession = Depends(get_db),
+    current_user: DbUserAuth = Depends(_get_current_user),
+):
+    result = await db.execute(
+        select(DbOrganization, DbOrganizationMember)
+        .join(DbOrganizationMember, DbOrganization.id == DbOrganizationMember.organization_id)
+        .where(DbOrganizationMember.user_id == current_user.id)
+    )
+    rows = result.all()
+    
+    counts_result = await db.execute(
+        select(DbOrganizationMember.organization_id, func.count(DbOrganizationMember.id))
+        .group_by(DbOrganizationMember.organization_id)
+    )
+    counts = {str(org_id): count for org_id, count in counts_result.all()}
+
+    orgs = []
+    for org, member in rows:
+        orgs.append({
+            "id": str(org.id),
+            "name": org.name,
+            "role": member.role,
+            "member_count": counts.get(str(org.id), 1)
+        })
+    return orgs
+
+
+@app.post("/api/organizations/switch")
+async def switch_organization(
+    payload: OrganizationSwitchPayload,
+    db: AsyncSession = Depends(get_db),
+    current_user: DbUserAuth = Depends(_get_current_user),
+):
+    try:
+        target_org_id = uuid.UUID(payload.organization_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid organization ID.")
+
+    result = await db.execute(
+        select(DbOrganizationMember)
+        .where(
+            DbOrganizationMember.organization_id == target_org_id,
+            DbOrganizationMember.user_id == current_user.id
+        )
+    )
+    membership = result.scalars().first()
+    
+    if not membership:
+        raise HTTPException(status_code=403, detail="You do not have access to this organization.")
+
+    from_org = current_user.current_organization_id
+    current_user.current_organization_id = target_org_id
+    await db.commit()
+    
+    logger.info(f"User switched organization | user_id={current_user.id} from_org={from_org} to_org={target_org_id}")
+    
+    return {"status": "ok", "organization_id": str(target_org_id)}
+
 @app.post("/api/templates/custom")
 async def save_custom_template(
     template: Template,
     db: AsyncSession = Depends(get_db),
-    _: DbUserAuth = Depends(_get_current_user),
+    current_user: DbUserAuth = Depends(_get_current_user),
 ):
     fields_list = [f.model_dump() for f in template.fields]
     db_template = DbCustomTemplate(
         id=template.id,
+        organization_id=current_user.current_organization_id,
         name=template.name,
         category="Saved",
         source="custom",
@@ -442,11 +668,11 @@ async def save_custom_template(
 @app.get("/api/workspaces")
 async def list_workspaces(
     db: AsyncSession = Depends(get_db),
-    current_user: DbUserAuth = Depends(_get_current_user),
+    current_org: uuid.UUID = Depends(get_current_org),
 ):
     result = await db.execute(
         select(DbWorkspace)
-        .where(DbWorkspace.user_email == current_user.email)
+        .where(DbWorkspace.organization_id == current_org)
         .order_by(
             desc(DbWorkspace.is_pinned),
             DbWorkspace.last_opened_at.desc().nullslast(),
@@ -467,10 +693,11 @@ async def create_workspace(
     if payload.template is None and not payload.template_id:
         raise HTTPException(status_code=400, detail="Template selection is required to create a workspace.")
 
-    template_obj = payload.template or await _resolve_template(payload.template_id, None, db)
+    template_obj = payload.template or await _resolve_template(payload.template_id, None, db, current_user.current_organization_id)
     now = datetime.now(timezone.utc)
     workspace = DbWorkspace(
         id=secrets.token_hex(12),
+        organization_id=current_user.current_organization_id,
         user_email=current_user.email,
         name=(payload.name or f"{template_obj.name} Workspace").strip(),
         template_id=template_obj.id,
@@ -493,12 +720,12 @@ async def create_workspace(
 async def get_workspace(
     workspace_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: DbUserAuth = Depends(_get_current_user),
+    current_org: uuid.UUID = Depends(get_current_org),
 ):
     result = await db.execute(
         select(DbWorkspace).where(
             DbWorkspace.id == workspace_id,
-            DbWorkspace.user_email == current_user.email,
+            DbWorkspace.organization_id == current_org,
         )
     )
     workspace = result.scalars().first()
@@ -516,12 +743,12 @@ async def update_workspace(
     workspace_id: str,
     payload: WorkspaceUpdatePayload,
     db: AsyncSession = Depends(get_db),
-    current_user: DbUserAuth = Depends(_get_current_user),
+    current_org: uuid.UUID = Depends(get_current_org),
 ):
     result = await db.execute(
         select(DbWorkspace).where(
             DbWorkspace.id == workspace_id,
-            DbWorkspace.user_email == current_user.email,
+            DbWorkspace.organization_id == current_org,
         )
     )
     workspace = result.scalars().first()
@@ -531,7 +758,7 @@ async def update_workspace(
     if payload.name is not None:
         workspace.name = payload.name.strip() or workspace.name
     if payload.template is not None or payload.template_id is not None:
-        template_obj = payload.template or await _resolve_template(payload.template_id, None, db)
+        template_obj = payload.template or await _resolve_template(payload.template_id, None, db, current_org)
         workspace.template_id = template_obj.id
         workspace.template_source = "custom" if template_obj.category in ("Saved", "Custom") else "builtin"
         workspace.template_data = template_obj.model_dump()
@@ -556,12 +783,12 @@ async def update_workspace(
 async def delete_workspace(
     workspace_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: DbUserAuth = Depends(_get_current_user),
+    current_org: uuid.UUID = Depends(get_current_org),
 ):
     result = await db.execute(
         select(DbWorkspace).where(
             DbWorkspace.id == workspace_id,
-            DbWorkspace.user_email == current_user.email,
+            DbWorkspace.organization_id == current_org,
         )
     )
     workspace = result.scalars().first()
@@ -576,10 +803,10 @@ async def delete_workspace(
 @app.post("/api/workspaces/cleanup-duplicates")
 async def cleanup_duplicate_workspaces(
     db: AsyncSession = Depends(get_db),
-    current_user: DbUserAuth = Depends(_get_current_user),
+    current_org: uuid.UUID = Depends(get_current_org),
 ):
     result = await db.execute(
-        select(DbWorkspace).where(DbWorkspace.user_email == current_user.email)
+        select(DbWorkspace).where(DbWorkspace.organization_id == current_org)
     )
     items = result.scalars().all()
 
@@ -628,9 +855,12 @@ async def cleanup_duplicate_workspaces(
 async def delete_custom_template(
     template_id: str,
     db: AsyncSession = Depends(get_db),
-    _: DbUserAuth = Depends(_get_current_user),
+    current_org: uuid.UUID = Depends(get_current_org),
 ):
-    result = await db.execute(select(DbCustomTemplate).where(DbCustomTemplate.id == template_id))
+    result = await db.execute(select(DbCustomTemplate).where(
+        DbCustomTemplate.id == template_id,
+        DbCustomTemplate.organization_id == current_org
+    ))
     db_template = result.scalars().first()
     if db_template:
         await db.delete(db_template)
@@ -638,7 +868,7 @@ async def delete_custom_template(
     return {"status": "deleted"}
 
 
-async def _resolve_template(template_id: str | None, raw_template: str | dict | None, db: AsyncSession) -> Template:
+async def _resolve_template(template_id: str | None, raw_template: str | dict | None, db: AsyncSession, current_org: uuid.UUID | None = None) -> Template:
     print(f"[TEMPLATE] id={template_id}, has_data={raw_template is not None}")
     
     if raw_template:
@@ -667,8 +897,12 @@ async def _resolve_template(template_id: str | None, raw_template: str | dict | 
     template = get_template(template_id)
     if template is not None:
         return template
+    
+    query = select(DbCustomTemplate).where(DbCustomTemplate.id == template_id)
+    if current_org:
+        query = query.where(DbCustomTemplate.organization_id == current_org)
         
-    result = await db.execute(select(DbCustomTemplate).where(DbCustomTemplate.id == template_id))
+    result = await db.execute(query)
     db_template = result.scalars().first()
     if db_template:
         return Template(id=db_template.id, name=db_template.name, category=db_template.category, source=db_template.source, fields=db_template.fields_data)
@@ -678,17 +912,22 @@ async def _resolve_template(template_id: str | None, raw_template: str | dict | 
 
 
 @app.get("/api/templates")
-async def get_templates(db: AsyncSession = Depends(get_db)):
+async def get_templates(
+    db: AsyncSession = Depends(get_db),
+    current_org: uuid.UUID | None = Depends(get_optional_current_org),
+):
     builtins = list_templates()
-    result = await db.execute(select(DbCustomTemplate))
-    customs = result.scalars().all()
     
-    if customs:
-        saved = []
-        for c in customs:
-            t = Template(id=c.id, name=c.name, category=c.category, source=c.source, fields=c.fields_data)
-            saved.append(t)
-        builtins["Saved"] = saved
+    if current_org:
+        result = await db.execute(select(DbCustomTemplate).where(DbCustomTemplate.organization_id == current_org))
+        customs = result.scalars().all()
+        
+        if customs:
+            saved = []
+            for c in customs:
+                t = Template(id=c.id, name=c.name, category=c.category, source=c.source, fields=c.fields_data)
+                saved.append(t)
+            builtins["Saved"] = saved
         
     return builtins
 
@@ -747,8 +986,9 @@ async def transcribe_and_extract(
     template: str | None = Form(default=None),
     language: str = Form(DEFAULT_LANGUAGE),
     db: AsyncSession = Depends(get_db),
+    current_org: uuid.UUID | None = Depends(get_optional_current_org),
 ):
-    template_data = await _resolve_template(template_id, template, db)
+    template_data = await _resolve_template(template_id, template, db, current_org)
     selected_language = validate_language(language, SUPPORTED_LANGUAGES)
 
     audio_bytes = await audio.read()
@@ -1056,7 +1296,7 @@ async def submit_form(
     db: AsyncSession = Depends(get_db),
     current_user: DbUserAuth = Depends(_get_current_user),
 ):
-    template_data = payload.template or await _resolve_template(payload.template_id, None, db)
+    template_data = payload.template or await _resolve_template(payload.template_id, None, db, current_user.current_organization_id)
     sheet_category = template_data.category if payload.template is None else "Custom"
 
     missing_required = [
@@ -1093,6 +1333,7 @@ async def submit_form(
     
     recent_record = DbRecentRecord(
         id=secrets.token_hex(8),
+        organization_id=current_user.current_organization_id,
         user_email=current_user.email,
         owner_email=current_user.email,
         owner_name=current_user.name,

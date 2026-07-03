@@ -10,8 +10,12 @@ async function parseResponse(response, fallbackMessage) {
   return payload;
 }
 
-export async function fetchTemplates() {
-  const response = await fetch(`${API_BASE_URL}/api/templates`);
+export async function fetchTemplates(sessionToken) {
+  const headers = {};
+  if (sessionToken) {
+    headers.Authorization = `Bearer ${sessionToken}`;
+  }
+  const response = await fetch(`${API_BASE_URL}/api/templates`, { headers });
   return parseResponse(response, "Could not load templates.");
 }
 

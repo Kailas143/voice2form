@@ -425,10 +425,12 @@ export default function App() {
   }, [authUser]);
 
   useEffect(() => {
-    fetchTemplates()
+    fetchTemplates(sessionToken)
       .then(setTemplates)
       .catch((error) => setErrorMessage(error.message));
+  }, [sessionToken]);
 
+  useEffect(() => {
     fetchToken().then((res) => {
       if (res && res.token) setAccessToken(res.token);
     });
@@ -461,7 +463,20 @@ export default function App() {
     try {
       const res = await fetchWorkspaces(sessionToken);
       if (res.status === "ok") {
-        setWorkspaces(res.workspaces || []);
+        const fetched = res.workspaces || [];
+        setWorkspaces(fetched);
+        
+        setActiveWorkspaceId((currentId) => {
+          if (currentId && !fetched.some((w) => w.id === currentId)) {
+            setInWorkspace(false);
+            setActiveWorkspaceName("");
+            setSelectedTemplate(null);
+            setStep(1);
+            setHomeView("workspaces");
+            return "";
+          }
+          return currentId;
+        });
       }
     } catch (error) {
       setErrorMessage(error.message);

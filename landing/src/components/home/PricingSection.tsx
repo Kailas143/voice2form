@@ -85,11 +85,11 @@ export default function PricingSection() {
               )}
               
               <h3 className={`text-xl font-bold mb-2 ${plan.popular ? 'text-white' : 'text-slate-900'}`}>{plan.name}</h3>
-              <p className={`text-sm mb-6 ${plan.popular ? 'text-blue-100' : 'text-slate-500'}`}>{plan.description}</p>
+              <p className={`text-sm mb-6 ${plan.popular ? 'text-white/80' : 'text-slate-500'}`}>{plan.description}</p>
               
               <div className="mb-8">
                 <span className="text-5xl font-extrabold tracking-tight">{plan.price}</span>
-                <span className={`text-lg font-medium ${plan.popular ? 'text-blue-100' : 'text-slate-500'}`}>{plan.period}</span>
+                <span className={`text-lg font-medium ${plan.popular ? 'text-white/80' : 'text-slate-500'}`}>{plan.period}</span>
               </div>
               
               <Link 

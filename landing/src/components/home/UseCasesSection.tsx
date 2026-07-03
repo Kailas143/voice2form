@@ -14,9 +14,9 @@ export default function UseCasesSection() {
     {
       title: "Field Inspections",
       description: "Inspectors speak their observations hands-free while walking the site. Data maps instantly to inspection criteria.",
-      color: "bg-blue-500",
-      textColor: "text-blue-700",
-      bgColor: "bg-blue-50"
+      color: "bg-primary",
+      textColor: "text-primary",
+      bgColor: "bg-primary/5"
     },
     {
       title: "Logistics & Delivery",

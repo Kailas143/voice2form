@@ -65,7 +65,7 @@ export default function FeaturesSection() {
               transition={{ duration: 0.5, delay: i * 0.1 }}
               className="bg-white p-8 rounded-2xl border border-slate-200 hover:border-primary/30 shadow-sm hover:shadow-xl transition-all group"
             >
-              <div className="w-12 h-12 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-center mb-6 group-hover:scale-110 group-hover:bg-blue-50 group-hover:border-blue-100 transition-all">
+              <div className="w-12 h-12 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-center mb-6 group-hover:scale-110 group-hover:bg-primary/5 group-hover:border-primary/20 transition-all">
                 {feature.icon}
               </div>
               <h3 className="text-xl font-bold text-slate-900 mb-3">{feature.title}</h3>
@@ -84,7 +84,7 @@ export default function FeaturesSection() {
           transition={{ duration: 0.5, delay: 0.6 }}
           className="bg-slate-900 p-8 md:p-12 rounded-2xl border border-slate-800 shadow-xl flex flex-col md:flex-row items-start md:items-center gap-8 group relative overflow-hidden"
         >
-          <div className="absolute top-0 right-0 bg-blue-600 text-white text-xs font-bold px-3 py-1 rounded-bl-lg">NEW</div>
+          <div className="absolute top-0 right-0 bg-primary text-white text-xs font-bold px-3 py-1 rounded-bl-lg">NEW</div>
           <div className="w-16 h-16 rounded-2xl bg-slate-800 border border-slate-700 flex items-center justify-center shrink-0 group-hover:scale-110 group-hover:bg-slate-700 transition-all">
             {features[6].icon}
           </div>

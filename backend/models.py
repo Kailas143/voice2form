@@ -103,3 +103,6 @@ class WorkspaceUpdatePayload(BaseModel):
     target_sheet_url: str | None = None
     extraction_rules: Literal["Standard", "Strict", "Lenient"] | None = None
     is_pinned: bool | None = None
+
+class OrganizationSwitchPayload(BaseModel):
+    organization_id: str

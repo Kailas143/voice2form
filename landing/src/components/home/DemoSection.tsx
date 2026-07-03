@@ -21,7 +21,7 @@ export default function DemoSection() {
       description: "Client Name: Michael, Date: Tomorrow, Time: 2:00 PM.",
     },
     {
-      icon: <Database className="w-8 h-8 text-blue-500" />,
+      icon: <Database className="w-8 h-8 text-white/900" />,
       title: "4. Sync & Export",
       description: "Data automatically pushes to Google Sheets or your CRM.",
     }
@@ -42,7 +42,7 @@ export default function DemoSection() {
 
         <div className="relative">
           {/* Connecting line */}
-          <div className="hidden md:block absolute top-1/2 left-0 right-0 h-1 bg-gradient-to-r from-primary/20 via-accent/20 to-blue-500/20 transform -translate-y-1/2 z-0 rounded-full"></div>
+          <div className="hidden md:block absolute top-1/2 left-0 right-0 h-1 bg-gradient-to-r from-primary/20 via-accent/20 to-primary/20 transform -translate-y-1/2 z-0 rounded-full"></div>
 
           <div className="grid grid-cols-1 md:grid-cols-4 gap-8 relative z-10 mb-20">
             {steps.map((step, index) => (
@@ -81,7 +81,7 @@ export default function DemoSection() {
               className="bg-white rounded-2xl p-8 border border-slate-200 shadow-sm flex flex-col"
             >
               <div className="flex items-center gap-3 mb-6">
-                <div className="w-12 h-12 rounded-full bg-blue-100 text-primary flex items-center justify-center">
+                <div className="w-12 h-12 rounded-full bg-primary/10 text-primary flex items-center justify-center">
                   <Mic size={24} />
                 </div>
                 <h3 className="text-2xl font-bold text-slate-900">Live Voice</h3>
@@ -109,28 +109,28 @@ export default function DemoSection() {
               transition={{ duration: 0.5 }}
               className="bg-slate-900 rounded-2xl p-8 border border-slate-800 shadow-xl flex flex-col relative overflow-hidden"
             >
-              <div className="absolute top-0 right-0 bg-blue-600 text-white text-xs font-bold px-3 py-1 rounded-bl-lg">NEW FEATURE</div>
+              <div className="absolute top-0 right-0 bg-primary text-white text-xs font-bold px-3 py-1 rounded-bl-lg">NEW FEATURE</div>
               <div className="flex items-center gap-3 mb-6">
-                <div className="w-12 h-12 rounded-full bg-slate-800 text-blue-400 flex items-center justify-center">
+                <div className="w-12 h-12 rounded-full bg-slate-800 text-primary flex items-center justify-center">
                   <FileText size={24} />
                 </div>
                 <h3 className="text-2xl font-bold text-white">Audio Upload</h3>
               </div>
               <ul className="space-y-4 text-slate-300 font-medium flex-1">
                 <li className="flex items-start gap-3">
-                  <CheckCircle className="w-5 h-5 text-blue-400 mt-0.5 shrink-0" />
+                  <CheckCircle className="w-5 h-5 text-primary mt-0.5 shrink-0" />
                   <span>Process existing recordings & voice notes</span>
                 </li>
                 <li className="flex items-start gap-3">
-                  <CheckCircle className="w-5 h-5 text-blue-400 mt-0.5 shrink-0" />
+                  <CheckCircle className="w-5 h-5 text-primary mt-0.5 shrink-0" />
                   <span>Ideal for bulk audio workflows</span>
                 </li>
                 <li className="flex items-start gap-3">
-                  <CheckCircle className="w-5 h-5 text-blue-400 mt-0.5 shrink-0" />
+                  <CheckCircle className="w-5 h-5 text-primary mt-0.5 shrink-0" />
                   <span>Extract data from meeting & customer support calls</span>
                 </li>
                 <li className="flex items-start gap-3">
-                  <CheckCircle className="w-5 h-5 text-blue-400 mt-0.5 shrink-0" />
+                  <CheckCircle className="w-5 h-5 text-primary mt-0.5 shrink-0" />
                   <span>Supports MP3, WAV, M4A, and OGG</span>
                 </li>
               </ul>
