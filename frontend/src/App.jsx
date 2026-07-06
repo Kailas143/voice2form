@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { useGoogleLogin } from "@react-oauth/google";
 
 import AuthContainer from "./components/auth/AuthContainer";
+import SettingsPage from "./components/settings/SettingsPage";
 import {
   fetchTemplates,
   submitRecord,
@@ -24,7 +25,14 @@ import {
   getWorkspaceApi,
   updateWorkspaceApi,
   deleteWorkspaceApi,
-  cleanupDuplicateWorkspacesApi
+  cleanupDuplicateWorkspacesApi,
+  fetchPlanCurrent,
+  fetchPlanUsage,
+  simulateUpgradeApi,
+  fetchNotificationPreferences,
+  fetchUnreadNotificationCount,
+  fetchNotifications,
+  markNotificationRead
 } from "./api";
 import { CATEGORY_ICONS, LANGUAGES, PROCESS_STAGES, STEPS } from "./constants";
 
@@ -368,6 +376,13 @@ export default function App() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [newFieldName, setNewFieldName] = useState("");
   const [targetSheetUrl, setTargetSheetUrl] = useState("");
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [currentPlan, setCurrentPlan] = useState(null);
+  const [planUsage, setPlanUsage] = useState(null);
+  const [isUpgrading, setIsUpgrading] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [notifications, setNotifications] = useState([]);
+  const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [sheetSyncMode, setSheetSyncMode] = useState("new");
   const [pendingSubmitAfterLogin, setPendingSubmitAfterLogin] = useState(false);
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
@@ -436,6 +451,19 @@ export default function App() {
     });
   }, []);
 
+  const fetchPlanData = async (token) => {
+    try {
+      const [planRes, usageRes] = await Promise.all([
+        fetchPlanCurrent(token),
+        fetchPlanUsage(token)
+      ]);
+      if (planRes.status === "ok") setCurrentPlan(planRes.plan);
+      if (usageRes.status === "ok") setPlanUsage(usageRes.usage);
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
   useEffect(() => {
     if (!authUser || !sessionToken) {
       setRecentRecords([]);
@@ -448,8 +476,96 @@ export default function App() {
           setRecentRecords(res.records || []);
         }
       })
-      .catch(console.error);
+      .catch((err) => {
+        if (err.status === 401 || err.status === 403) {
+          handleLogout();
+        }
+      });
+      
+    fetchPlanData(sessionToken);
+    
+    // Fetch unread count
+    fetchUnreadNotificationCount(sessionToken).then(res => {
+      if (res.status === "ok" || res.count !== undefined) {
+        setUnreadCount(res.count);
+      }
+    });
   }, [authUser, sessionToken]);
+
+  const toggleNotifications = async () => {
+    setIsNotificationsOpen(!isNotificationsOpen);
+    if (!isNotificationsOpen && sessionToken) {
+      // Fetch latest notifications when opening
+      try {
+        const res = await fetchNotifications(sessionToken, 1, 5);
+        if (res.status === "ok") {
+          setNotifications(res.notifications);
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    }
+  };
+
+  const handleNotificationClick = async (notif) => {
+    if (!notif.is_read && sessionToken) {
+      try {
+        await markNotificationRead(sessionToken, notif.id);
+        setUnreadCount(Math.max(0, unreadCount - 1));
+        setNotifications(notifications.map(n => n.id === notif.id ? { ...n, is_read: true } : n));
+      } catch (e) {
+        console.error(e);
+      }
+    }
+  };
+
+  const isLimitReached = Boolean(planUsage && ((planUsage.submissions_limit !== -1 && planUsage.submissions >= planUsage.submissions_limit) || (planUsage.audio_minutes_limit !== -1 && planUsage.audio_minutes >= planUsage.audio_minutes_limit)));
+
+  const renderUsageBanner = () => {
+    if (!planUsage || !currentPlan) return null;
+    if (currentPlan.slug === 'professional') return null; // Assuming pro doesn't need warnings for now or maybe it does, let's just check limits.
+    
+    let highestPercent = 0;
+    let limitType = '';
+    
+    if (planUsage.submissions_limit !== -1) {
+      const subP = planUsage.submissions / planUsage.submissions_limit;
+      if (subP > highestPercent) { highestPercent = subP; limitType = 'form submissions'; }
+    }
+    if (planUsage.audio_minutes_limit !== -1) {
+      const audP = planUsage.audio_minutes / planUsage.audio_minutes_limit;
+      if (audP > highestPercent) { highestPercent = audP; limitType = 'audio minutes'; }
+    }
+    
+    if (highestPercent < 0.8) return null;
+    
+    let alertClass = 'alert-warning';
+    let title = 'Approaching Limit';
+    let icon = '⚠️';
+    
+    if (highestPercent >= 1) {
+      alertClass = 'alert-error';
+      title = 'Limit Reached';
+      icon = '🛑';
+    } else if (highestPercent >= 0.95) {
+      alertClass = 'alert-error';
+      title = 'Action Required';
+      icon = '🚨';
+    }
+    
+    return (
+      <div className={`alert ${alertClass} rounded-xl mb-6 shadow-sm border border-base-300 flex items-center justify-between`}>
+        <div className="flex items-center gap-3">
+          <span className="text-xl">{icon}</span>
+          <div>
+            <h3 className="font-bold text-sm">{title}</h3>
+            <div className="text-xs opacity-80">You've used {Math.round(highestPercent * 100)}% of your monthly {limitType} quota.</div>
+          </div>
+        </div>
+        <button className="btn btn-sm" onClick={() => setIsSettingsOpen(true)}>Upgrade Plan</button>
+      </div>
+    );
+  };
 
   async function refreshWorkspaces(showLoader = false) {
     if (!sessionToken) {
@@ -844,7 +960,21 @@ export default function App() {
       setIsUploadingTemplate(true);
       const parsedTemplate = await uploadTemplateFile(file);
       setUploadedTemplateName(file.name);
-      setSelectedTemplate(normalizeSelectedTemplate({ ...parsedTemplate, source: "custom" }));
+      
+      const newTemplate = normalizeSelectedTemplate({ ...parsedTemplate, source: "custom" });
+      setSelectedTemplate(newTemplate);
+      
+      // Auto-save the imported template so it appears in the 'Saved' tab
+      if (sessionToken) {
+        try {
+          await saveCustomTemplateApi(newTemplate, sessionToken);
+          // Refresh the templates list to show the new 'Saved' tab
+          const freshTemplates = await fetchTemplates(sessionToken);
+          setTemplates(freshTemplates);
+        } catch (saveError) {
+          console.warn("Failed to auto-save custom template:", saveError);
+        }
+      }
     } catch (error) {
       setErrorMessage(error.message);
     } finally {
@@ -1472,6 +1602,11 @@ export default function App() {
       if (allMissing) {
         setErrorMessage("Nothing extracted. Check audio language matches setting.");
       }
+
+      const usagePayload = await fetchPlanUsage(sessionToken);
+      if (usagePayload?.status === "ok") {
+        setPlanUsage(usagePayload.usage);
+      }
     } catch (error) {
       setErrorMessage(error.message);
     } finally {
@@ -1542,9 +1677,15 @@ export default function App() {
         }
       }
 
-      const recordsPayload = await fetchRecentRecords(sessionToken);
+      const [recordsPayload, usagePayload] = await Promise.all([
+        fetchRecentRecords(sessionToken),
+        fetchPlanUsage(sessionToken)
+      ]);
       if (recordsPayload?.status === "ok") {
         setRecentRecords(recordsPayload.records || []);
+      }
+      if (usagePayload?.status === "ok") {
+        setPlanUsage(usagePayload.usage);
       }
       if (startNext) {
         resetAudioAndExtraction();
@@ -1687,15 +1828,18 @@ export default function App() {
     Saved: "Saved"
   };
   const featuredTemplates = Object.entries(templates)
+    .filter(([category]) => category !== "Saved")
     .flatMap(([category, items]) => items.slice(0, 2).map((item) => ({ ...item, categoryLabel: getDisplayCategoryName(category) })))
     .slice(0, 4);
   const readyMadeTemplates = Object.entries(templates)
     .filter(([category]) => category !== "Saved")
     .flatMap(([category, items]) => items.map((item) => ({ ...item, categoryLabel: getDisplayCategoryName(category) })));
   const savedTemplates = (templates.Saved || []).map((item) => ({ ...item, categoryLabel: getDisplayCategoryName("Saved") }));
-  const readyMadeByTab = (marketplaceTab === "all" || marketplaceTab === "Saved")
-    ? readyMadeTemplates
-    : readyMadeTemplates.filter((template) => template.category === marketplaceTab);
+  const readyMadeByTab = marketplaceTab === "Saved"
+    ? [] // Do not show ready-made templates when the Saved tab is explicitly selected
+    : (marketplaceTab === "all"
+      ? readyMadeTemplates
+      : readyMadeTemplates.filter((template) => template.category === marketplaceTab));
   const hasSearchQuery = Boolean(templateSearchQuery.trim());
   const displayedTemplates = (hasSearchQuery
     ? readyMadeByTab.filter((template) => {
@@ -2163,169 +2307,175 @@ export default function App() {
               </button>
             </section>
 
-            <section className="marketplace-section">
-              <div className="section-headline">
-                <div className="section-headline-main">
-                  <h2>{activeTemplateLabel} templates</h2>
-                  <p>Choose a template, preview the fields, then continue into voice capture.</p>
+            {marketplaceTab !== "Saved" && (
+              <section className="marketplace-section">
+                <div className="section-headline">
+                  <div className="section-headline-main">
+                    <h2>{activeTemplateLabel} templates</h2>
+                    <p>Choose a template, preview the fields, then continue into voice capture.</p>
+                  </div>
+                  <div className="section-headline-tools">
+                    {hasSearchQuery ? <div className="meta-chip">Search: "{templateSearchQuery.trim()}"</div> : null}
+                    <div className="section-meta">{displayedTemplates.length} templates shown</div>
+                    {hasSearchQuery ? (
+                      <button type="button" className="clear-search-btn" onClick={() => setTemplateSearchQuery("")}>Clear search</button>
+                    ) : null}
+                  </div>
                 </div>
-                <div className="section-headline-tools">
-                  {hasSearchQuery ? <div className="meta-chip">Search: "{templateSearchQuery.trim()}"</div> : null}
-                  <div className="section-meta">{displayedTemplates.length} templates shown</div>
-                  {hasSearchQuery ? (
-                    <button type="button" className="clear-search-btn" onClick={() => setTemplateSearchQuery("")}>Clear search</button>
-                  ) : null}
-                </div>
-              </div>
 
-              <div className="template-grid">
-                {displayedTemplates.map((template, index) => (
-                  <article key={template.id} className={`template-market-card animate-fade-up delay-${(index % 5 + 1) * 100}`}>
-                    <div className="template-card-top">
-                      <div className="template-icon">{CATEGORY_ICONS[template.category] || "▣"}</div>
-                      <span className="template-badge">{template.categoryLabel || template.category}</span>
-                    </div>
-
-                    <div className="template-card-body">
-                      <h3>{template.name}</h3>
-                      <p>{template.fields.length} fields · ready for voice capture</p>
-                      <div className="field-pills">
-                        {template.fields.slice(0, 4).map((field) => (
-                          <span key={field.name}>{field.name}</span>
-                        ))}
+                <div className="template-grid">
+                  {displayedTemplates.map((template, index) => (
+                    <article key={template.id} className={`template-market-card animate-fade-up delay-${(index % 5 + 1) * 100}`}>
+                      <div className="template-card-top">
+                        <div className="template-icon">{CATEGORY_ICONS[template.category] || "▣"}</div>
+                        <span className="template-badge">{template.categoryLabel || template.category}</span>
                       </div>
-                    </div>
 
-                    <div className="template-card-footer">
-                      <button type="button" className="ghost-button" onClick={() => {
-                        setSelectedTemplate(normalizeSelectedTemplate(template));
-                        setIsTemplateModalOpen(true);
-                      }}>
-                        Preview
-                      </button>
-                      <button type="button" className="primary-button subtle" onClick={() => openWorkspaceFromTemplate(template)}>
-                        Use template
-                      </button>
-                    </div>
-                  </article>
-                ))}
-
-                <article
-                  className={`template-market-card template-import-card animate-fade-up delay-${(displayedTemplates.length % 5 + 1) * 100}`}
-                  title="Upload a PDF, DOCX, or JSON form and let Voice2Form extract fields automatically."
-                >
-                  <div className="template-card-top">
-                    <div className="template-icon">📄</div>
-                    <span className="template-badge">Import</span>
-                  </div>
-
-                  <div className="template-card-body">
-                    <h3>Import Existing Form</h3>
-                    <p>PDF DOCX JSON</p>
-                  </div>
-
-                  <div className="template-card-footer">
-                    <label
-                      className="upload-form-btn"
-                      title="Upload a PDF, DOCX, or JSON form and let Voice2Form extract fields automatically."
-                    >
-                      <input
-                        type="file"
-                        accept=".json,.csv,.pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-                        onChange={handleTemplateFileChange}
-                        disabled={isUploadingTemplate}
-                      />
-                      {isUploadingTemplate ? "Importing..." : "Upload Form"}
-                    </label>
-                  </div>
-                </article>
-              </div>
-
-              {displayedTemplates.length === 0 ? (
-                <div className="empty-state">
-                  <strong>No templates match your search.</strong>
-                  <p>Try a different category tab or upload a custom template.</p>
-                </div>
-              ) : null}
-            </section>
-
-            <section className="marketplace-section saved-templates-section" ref={savedSectionRef}>
-              <div className="section-headline">
-                <div className="section-headline-main">
-                  <h2>Saved templates</h2>
-                  <p>Templates you saved for later use.</p>
-                </div>
-                <div className="section-headline-tools">
-                  <div className="section-meta">{displayedSavedTemplates.length} templates shown</div>
-                </div>
-              </div>
-
-              <div className="template-grid">
-                {displayedSavedTemplates.map((template, index) => (
-                  <article key={template.id} className={`template-market-card animate-fade-up delay-${(index % 5 + 1) * 100}`}>
-                    <div className="template-card-top">
-                      <div className="template-icon">{CATEGORY_ICONS[template.category] || "▣"}</div>
-                      <span className="template-badge">Saved</span>
-                    </div>
-
-                    <div className="template-card-body">
-                      <h3>{template.name}</h3>
-                      <p>{template.fields.length} fields · ready for voice capture</p>
-                      <div className="field-pills">
-                        {template.fields.slice(0, 4).map((field) => (
-                          <span key={field.name}>{field.name}</span>
-                        ))}
+                      <div className="template-card-body">
+                        <h3>{template.name}</h3>
+                        <p>{template.fields.length} fields · ready for voice capture</p>
+                        <div className="field-pills">
+                          {template.fields.slice(0, 4).map((field) => (
+                            <span key={field.name}>{field.name}</span>
+                          ))}
+                        </div>
                       </div>
-                    </div>
 
-                    <div className="template-card-footer">
-                      <button type="button" className="ghost-button" onClick={() => {
-                        setSelectedTemplate(normalizeSelectedTemplate(template));
-                        setIsTemplateModalOpen(true);
-                      }}>
-                        Preview
-                      </button>
-                      <button type="button" className="primary-button subtle" onClick={() => openWorkspaceFromTemplate(template)}>
-                        Use template
-                      </button>
-                    </div>
-                  </article>
-                ))}
-              </div>
+                      <div className="template-card-footer">
+                        <button type="button" className="ghost-button" onClick={() => {
+                          setSelectedTemplate(normalizeSelectedTemplate(template));
+                          setIsTemplateModalOpen(true);
+                        }}>
+                          Preview
+                        </button>
+                        <button type="button" className="primary-button subtle" onClick={() => openWorkspaceFromTemplate(template)}>
+                          Use template
+                        </button>
+                      </div>
+                    </article>
+                  ))}
 
-              {displayedSavedTemplates.length === 0 ? (
-                <div className="empty-state">
-                  <strong>No saved templates yet.</strong>
-                  <p>Save a custom template to see it here.</p>
-                </div>
-              ) : null}
-            </section>
-
-            <section className="marketplace-section marketplace-featured-strip">
-              <div className="section-headline compact">
-                <div>
-                  <h2>Popular starter sets</h2>
-                  <p>Fast picks for teams that want the shortest path from voice to form data.</p>
-                </div>
-              </div>
-              <div className="featured-strip-grid">
-                {featuredTemplates.map((template, index) => (
-                  <button
-                    key={template.id}
-                    type="button"
-                    className={`featured-strip-card animate-fade-up delay-${(index % 5 + 1) * 100}`}
-                    onClick={() => {
-                      setSelectedTemplate(normalizeSelectedTemplate(template));
-                      setIsTemplateModalOpen(true);
-                    }}
+                  <article
+                    className={`template-market-card template-import-card animate-fade-up delay-${(displayedTemplates.length % 5 + 1) * 100}`}
+                    title="Upload a PDF, DOCX, or JSON form and let Voice2Form extract fields automatically."
                   >
-                    <span>{CATEGORY_ICONS[template.category] || "▣"}</span>
-                    <strong>{template.name}</strong>
-                    <em>{template.categoryLabel || template.category}</em>
-                  </button>
-                ))}
-              </div>
-            </section>
+                    <div className="template-card-top">
+                      <div className="template-icon">📄</div>
+                      <span className="template-badge">Import</span>
+                    </div>
+
+                    <div className="template-card-body">
+                      <h3>Import Existing Form</h3>
+                      <p>PDF DOCX JSON</p>
+                    </div>
+
+                    <div className="template-card-footer">
+                      <label
+                        className="upload-form-btn"
+                        title="Upload a PDF, DOCX, or JSON form and let Voice2Form extract fields automatically."
+                      >
+                        <input
+                          type="file"
+                          accept=".json,.csv,.pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                          onChange={handleTemplateFileChange}
+                          disabled={isUploadingTemplate}
+                        />
+                        {isUploadingTemplate ? "Importing..." : "Upload Form"}
+                      </label>
+                    </div>
+                  </article>
+                </div>
+
+                {displayedTemplates.length === 0 ? (
+                  <div className="empty-state">
+                    <strong>No templates match your search.</strong>
+                    <p>Try a different category tab or upload a custom template.</p>
+                  </div>
+                ) : null}
+              </section>
+            )}
+
+            {(marketplaceTab === "all" || marketplaceTab === "Saved") && (
+              <section className="marketplace-section saved-templates-section" ref={savedSectionRef}>
+                <div className="section-headline">
+                  <div className="section-headline-main">
+                    <h2>Saved templates</h2>
+                    <p>Templates you saved for later use.</p>
+                  </div>
+                  <div className="section-headline-tools">
+                    <div className="section-meta">{displayedSavedTemplates.length} templates shown</div>
+                  </div>
+                </div>
+
+                <div className="template-grid">
+                  {displayedSavedTemplates.map((template, index) => (
+                    <article key={template.id} className={`template-market-card animate-fade-up delay-${(index % 5 + 1) * 100}`}>
+                      <div className="template-card-top">
+                        <div className="template-icon">{CATEGORY_ICONS[template.category] || "▣"}</div>
+                        <span className="template-badge">Saved</span>
+                      </div>
+
+                      <div className="template-card-body">
+                        <h3>{template.name}</h3>
+                        <p>{template.fields.length} fields · ready for voice capture</p>
+                        <div className="field-pills">
+                          {template.fields.slice(0, 4).map((field) => (
+                            <span key={field.name}>{field.name}</span>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="template-card-footer">
+                        <button type="button" className="ghost-button" onClick={() => {
+                          setSelectedTemplate(normalizeSelectedTemplate(template));
+                          setIsTemplateModalOpen(true);
+                        }}>
+                          Preview
+                        </button>
+                        <button type="button" className="primary-button subtle" onClick={() => openWorkspaceFromTemplate(template)}>
+                          Use template
+                        </button>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+
+                {displayedSavedTemplates.length === 0 ? (
+                  <div className="empty-state">
+                    <strong>No saved templates yet.</strong>
+                    <p>Save a custom template to see it here.</p>
+                  </div>
+                ) : null}
+              </section>
+            )}
+
+            {marketplaceTab === "all" && (
+              <section className="marketplace-section marketplace-featured-strip">
+                <div className="section-headline compact">
+                  <div>
+                    <h2>Popular starter sets</h2>
+                    <p>Fast picks for teams that want the shortest path from voice to form data.</p>
+                  </div>
+                </div>
+                <div className="featured-strip-grid">
+                  {featuredTemplates.map((template, index) => (
+                    <button
+                      key={template.id}
+                      type="button"
+                      className={`featured-strip-card animate-fade-up delay-${(index % 5 + 1) * 100}`}
+                      onClick={() => {
+                        setSelectedTemplate(normalizeSelectedTemplate(template));
+                        setIsTemplateModalOpen(true);
+                      }}
+                    >
+                      <span>{CATEGORY_ICONS[template.category] || "▣"}</span>
+                      <strong>{template.name}</strong>
+                      <em>{template.categoryLabel || template.category}</em>
+                    </button>
+                  ))}
+                </div>
+              </section>
+            )}
           </main>
 
           <footer className="marketplace-footer">
@@ -2454,6 +2604,95 @@ export default function App() {
 
               <div className="divider divider-horizontal m-0 w-px h-6 bg-base-300 self-center"></div>
 
+              {currentPlan && (
+                <div className="flex items-center gap-3 bg-base-200/50 px-3 py-1.5 rounded-lg border border-base-300 hover:border-base-content/20 transition-colors">
+                  <span className="text-xs font-bold uppercase tracking-wider text-base-content/70 whitespace-nowrap">
+                    {currentPlan.name} Plan
+                  </span>
+                  
+                  {planUsage && planUsage.submissions_limit !== -1 && (
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-medium text-base-content/80 whitespace-nowrap">
+                        {planUsage.submissions} / {planUsage.submissions_limit}
+                      </span>
+                      <div className="w-16 bg-base-300 rounded-full h-1.5 overflow-hidden flex-shrink-0">
+                        <div className="bg-primary h-1.5 rounded-full" style={{ width: `${Math.min(100, (planUsage.submissions / planUsage.submissions_limit) * 100)}%` }}></div>
+                      </div>
+                    </div>
+                  )}
+
+                  {currentPlan.slug === "free" && (
+                    <button 
+                      className="text-[10px] bg-primary/10 text-primary hover:bg-primary hover:text-white px-2 py-0.5 rounded transition-colors uppercase font-bold tracking-wide cursor-pointer ml-1 whitespace-nowrap"
+                      onClick={async () => {
+                        setIsUpgrading(true);
+                        try {
+                          await simulateUpgradeApi(sessionToken, "professional");
+                          const [planRes, usageRes] = await Promise.all([
+                            fetchPlanCurrent(sessionToken),
+                            fetchPlanUsage(sessionToken)
+                          ]);
+                          setCurrentPlan(planRes.plan);
+                          setPlanUsage(usageRes.usage);
+                        } catch (e) {
+                          setErrorMessage(e.message);
+                        }
+                        setIsUpgrading(false);
+                      }}
+                      disabled={isUpgrading}
+                    >
+                      {isUpgrading ? "..." : "Upgrade"}
+                    </button>
+                  )}
+                </div>
+              )}
+
+              <div className="divider divider-horizontal m-0 w-px h-6 bg-base-300 self-center"></div>
+
+              <div className="dropdown dropdown-end mr-2">
+                <button 
+                  type="button" 
+                  className="btn btn-ghost btn-circle btn-sm relative hover:bg-base-200"
+                  onClick={toggleNotifications}
+                >
+                  <span className="text-lg">🔔</span>
+                  {unreadCount > 0 && (
+                    <span className="absolute top-0 right-0 inline-flex items-center justify-center w-4 h-4 text-[10px] font-bold text-white bg-error rounded-full ring-2 ring-base-100">
+                      {unreadCount}
+                    </span>
+                  )}
+                </button>
+                {isNotificationsOpen && (
+                  <ul tabIndex={0} className="menu menu-sm dropdown-content bg-base-100 rounded-box z-[50] mt-3 w-80 p-0 shadow-xl border border-base-200 animate-scale-in origin-top-right overflow-hidden">
+                    <li className="menu-title px-4 py-3 border-b border-base-200 bg-base-200/30 flex flex-row justify-between items-center">
+                      <span className="font-bold text-base-content text-sm">Notifications</span>
+                    </li>
+                    <div className="max-h-80 overflow-y-auto">
+                      {notifications.length === 0 ? (
+                        <div className="p-6 text-center text-base-content/60 text-xs">No notifications yet.</div>
+                      ) : (
+                        notifications.map(notif => (
+                          <li key={notif.id} className={`border-b border-base-200 last:border-0 ${notif.is_read ? 'opacity-70' : 'bg-primary/5'}`}>
+                            <a className="p-4 block hover:bg-base-200" onClick={() => handleNotificationClick(notif)}>
+                              <div className="flex justify-between items-start mb-1">
+                                <span className={`font-bold text-sm ${!notif.is_read ? 'text-base-content' : 'text-base-content/80'}`}>{notif.title}</span>
+                                {!notif.is_read && <span className="w-2 h-2 rounded-full bg-primary mt-1"></span>}
+                              </div>
+                              <p className="text-xs text-base-content/70 line-clamp-2 leading-relaxed">{notif.message}</p>
+                            </a>
+                          </li>
+                        ))
+                      )}
+                    </div>
+                    <li className="border-t border-base-200">
+                      <a className="text-center p-3 font-semibold text-primary text-xs hover:bg-primary/10 transition-colors" onClick={() => { setIsNotificationsOpen(false); setIsSettingsOpen(true); }}>
+                        View All in Settings
+                      </a>
+                    </li>
+                  </ul>
+                )}
+              </div>
+
               <div className="dropdown dropdown-end">
                 <div tabIndex={0} role="button" className="btn btn-ghost btn-circle avatar placeholder hover:ring-2 hover:ring-primary/20 transition-all">
                   <div className="bg-neutral text-neutral-content w-9 h-9 rounded-full ring-1 ring-base-300 flex items-center justify-center overflow-hidden">
@@ -2467,8 +2706,16 @@ export default function App() {
                       <span className="text-xs text-base-content/60 break-all">{authUser?.email}</span>
                     </div>
                   </li>
+                  
                   <li>
-                    <button type="button" onClick={handleLogout} className="text-error font-medium hover:bg-error/10 flex gap-2 items-center py-2">
+                    <button type="button" onClick={() => setIsSettingsOpen(true)} className="font-medium flex gap-2 items-center py-2">
+                      <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+                      Account Settings
+                    </button>
+                  </li>
+                  
+                  <li>
+                    <button type="button" onClick={handleLogout} className="text-error font-medium hover:bg-error/10 flex gap-2 items-center py-2 mt-1">
                       <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
                       Logout
                     </button>
@@ -2479,6 +2726,7 @@ export default function App() {
           </header>
 
           <main className="recording-workspace-main">
+            {renderUsageBanner()}
             <section className="recording-capture-panel">
               <div className="recording-panel-head">
                 <div className="recording-panel-copy">
@@ -2488,17 +2736,17 @@ export default function App() {
               </div>
 
               <div className="recording-capture-actions">
-                <label className="upload-cta recording-upload-cta">
+                <label className={`upload-cta recording-upload-cta ${isLimitReached ? 'disabled' : ''}`} style={isLimitReached ? { opacity: 0.5, pointerEvents: 'none' } : {}}>
                   <input
                     type="file"
                     accept="audio/*"
                     onChange={handleAudioFileChange}
-                    disabled={isProcessing}
+                    disabled={isProcessing || isLimitReached}
                   />
                   <span>Upload Audio</span>
                 </label>
                 {!isRecording ? (
-                  <button type="button" className="primary-button recording-mic-button" onClick={startRecording} disabled={isProcessing}>
+                  <button type="button" className="primary-button recording-mic-button" onClick={startRecording} disabled={isProcessing || isLimitReached} style={isLimitReached ? { opacity: 0.5, cursor: 'not-allowed' } : {}}>
                     Start Recording
                   </button>
                 ) : (
@@ -2656,8 +2904,8 @@ export default function App() {
               type="button"
               className="secondary-button"
               onClick={() => handleSubmit({ stayInWorkspace: true })}
-              disabled={requiredMissing || isSubmitting || isProcessing || !transcript || !isSheetsReady}
-              title={!isSheetsReady ? "Google Sync must be connected to save" : ""}
+              disabled={requiredMissing || isSubmitting || isProcessing || !transcript || !isSheetsReady || isLimitReached}
+              title={!isSheetsReady ? "Google Sync must be connected to save" : isLimitReached ? "Submission limit reached" : ""}
             >
               {isSubmitting ? "Saving..." : "Save Record"}
             </button>
@@ -2665,8 +2913,8 @@ export default function App() {
               type="button"
               className="primary-button recording-primary-save"
               onClick={() => handleSubmit({ startNext: true })}
-              disabled={requiredMissing || isSubmitting || isProcessing || !transcript || !isSheetsReady}
-              title={!isSheetsReady ? "Google Sync must be connected to save" : ""}
+              disabled={requiredMissing || isSubmitting || isProcessing || !transcript || !isSheetsReady || isLimitReached}
+              title={!isSheetsReady ? "Google Sync must be connected to save" : isLimitReached ? "Submission limit reached" : ""}
             >
               {isSubmitting ? "Saving..." : "Save & Start Next Recording"}
             </button>
@@ -2680,6 +2928,7 @@ export default function App() {
           <main className={`app-card ${step === 2 || step === 3 ? "workspace-shell-stage" : ""}`}>
             {step !== 2 && step !== 3 ? (
               <>
+                {renderUsageBanner()}
                 <header className="hero">
                   <div>
                     <p className="eyebrow">Voice-driven form capture</p>
@@ -2691,6 +2940,7 @@ export default function App() {
                   <div className="hero-user-meta">
                     <strong>{authUser?.name}</strong>
                     <span>{authUser?.email}</span>
+                    <button type="button" className="secondary-button compact" onClick={() => setIsSettingsOpen(true)}>Settings</button>
                     <button type="button" className="secondary-button compact" onClick={handleLogout}>Logout</button>
                   </div>
                 </header>
@@ -2991,12 +3241,12 @@ export default function App() {
                   </div>
 
                   {audioMode === "upload" ? (
-                    <label className="upload-box-premium ai-upload-card">
+                    <label className={`upload-box-premium ai-upload-card ${isLimitReached ? 'disabled' : ''}`} style={isLimitReached ? { opacity: 0.5, pointerEvents: 'none' } : {}}>
                       <div className="upload-box-icon">🎙</div>
                       <div className="upload-box-title">Upload Audio</div>
                       <div className="upload-box-text">Drag & drop audio file</div>
                       <div className="upload-box-btn">Browse Files</div>
-                      <input type="file" accept="audio/*" onChange={handleAudioFileChange} />
+                      <input type="file" accept="audio/*" onChange={handleAudioFileChange} disabled={isLimitReached} />
                       {audioFile ? <strong className="selected-file-text">{audioFile.name}</strong> : null}
                     </label>
                   ) : (
@@ -3014,7 +3264,7 @@ export default function App() {
                       ) : null}
                       <div className="action-row" style={{ justifyContent: "center", marginTop: "16px", gap: "12px", flexWrap: "wrap" }}>
                         {!isRecording ? (
-                          <button type="button" className="primary-button pulse-hover big-mic-btn" onClick={startRecording}>
+                          <button type="button" className="primary-button pulse-hover big-mic-btn" onClick={startRecording} disabled={isLimitReached} style={isLimitReached ? { opacity: 0.5, cursor: 'not-allowed' } : {}}>
                             🎤 Start Recording
                           </button>
                         ) : (
@@ -3179,16 +3429,16 @@ export default function App() {
                     <button type="button" className="secondary-button" onClick={handleReturnToWorkspace}>
                       Return to Workspace
                     </button>
-                    <label className="upload-cta">
+                    <label className={`upload-cta ${isLimitReached ? 'disabled' : ''}`} style={isLimitReached ? { opacity: 0.5, pointerEvents: 'none' } : {}}>
                       <input
                         type="file"
                         accept="audio/*"
                         onChange={handleAudioFileChange}
-                        disabled={isProcessing}
+                        disabled={isProcessing || isLimitReached}
                       />
                       <span>Upload Audio</span>
                     </label>
-                    <button type="button" className="secondary-button" onClick={handleStartWorkspaceLiveAudio}>
+                    <button type="button" className="secondary-button" onClick={handleStartWorkspaceLiveAudio} disabled={isLimitReached} style={isLimitReached ? { opacity: 0.5, cursor: 'not-allowed' } : {}}>
                       Live Audio
                     </button>
                     <button
@@ -3373,6 +3623,16 @@ export default function App() {
           document.body
         )
       ) : null}
+      {isSettingsOpen && (
+        <SettingsPage 
+          onClose={() => setIsSettingsOpen(false)}
+          authUser={authUser}
+          currentPlan={currentPlan}
+          planUsage={planUsage}
+          sessionToken={sessionToken}
+          fetchPlanData={() => fetchPlanData(sessionToken)}
+        />
+      )}
     </>
   );
 }

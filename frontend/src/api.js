@@ -231,3 +231,93 @@ export async function cleanupDuplicateWorkspacesApi(sessionToken) {
   });
   return parseResponse(response, "Could not clean up duplicate workspaces.");
 }
+
+export async function fetchPlanCurrent(sessionToken) {
+  const response = await fetch(`${API_BASE_URL}/api/plans/current`, {
+    headers: {
+      Authorization: `Bearer ${sessionToken}`
+    }
+  });
+  return parseResponse(response, "Could not fetch current plan.");
+}
+
+export async function fetchPlanUsage(sessionToken) {
+  const response = await fetch(`${API_BASE_URL}/api/plans/usage`, {
+    headers: {
+      Authorization: `Bearer ${sessionToken}`
+    }
+  });
+  return parseResponse(response, "Could not fetch plan usage.");
+}
+
+export async function simulateUpgradeApi(sessionToken, targetPlanSlug) {
+  const response = await fetch(`${API_BASE_URL}/api/admin/simulate-upgrade`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${sessionToken}`
+    },
+    body: JSON.stringify({
+      target_plan_slug: targetPlanSlug,
+      admin_secret: "dev_secret"
+    })
+  });
+  return parseResponse(response, "Could not simulate upgrade.");
+}
+
+export async function simulateDowngradeApi(sessionToken) {
+  const response = await fetch(`${API_BASE_URL}/api/admin/simulate-downgrade`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${sessionToken}`
+    },
+    body: JSON.stringify({
+      target_plan_slug: "free",
+      admin_secret: "dev_secret"
+    })
+  });
+  return parseResponse(response, "Could not simulate downgrade.");
+}
+
+export async function fetchNotificationPreferences(sessionToken) {
+  const response = await fetch(`${API_BASE_URL}/api/notifications/preferences`, {
+    headers: { Authorization: `Bearer ${sessionToken}` }
+  });
+  return parseResponse(response, "Could not fetch notification preferences.");
+}
+
+export async function updateNotificationPreferences(sessionToken, payload) {
+  const response = await fetch(`${API_BASE_URL}/api/notifications/preferences`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${sessionToken}`
+    },
+    body: JSON.stringify(payload)
+  });
+  return parseResponse(response, "Could not update notification preferences.");
+}
+
+export async function fetchUnreadNotificationCount(sessionToken) {
+  const response = await fetch(`${API_BASE_URL}/api/notifications/unread-count`, {
+    headers: { Authorization: `Bearer ${sessionToken}` }
+  });
+  return parseResponse(response, "Could not fetch unread notification count.");
+}
+
+export async function fetchNotifications(sessionToken, page = 1, pageSize = 20) {
+  const response = await fetch(`${API_BASE_URL}/api/notifications?page=${page}&page_size=${pageSize}`, {
+    headers: { Authorization: `Bearer ${sessionToken}` }
+  });
+  return parseResponse(response, "Could not fetch notifications.");
+}
+
+export async function markNotificationRead(sessionToken, notificationId) {
+  const response = await fetch(`${API_BASE_URL}/api/notifications/${notificationId}/read`, {
+    method: "PUT",
+    headers: { Authorization: `Bearer ${sessionToken}` }
+  });
+  return parseResponse(response, "Could not mark notification read.");
+}
+

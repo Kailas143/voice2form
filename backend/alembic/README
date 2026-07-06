@@ -1,0 +1,29 @@
+# Alembic Database Migrations
+
+Generic single-database configuration with an async dbapi.
+
+## Recommended Development Workflow
+
+For every schema change, follow these 5 steps:
+
+### 1. Modify the Database Models
+Update `backend/database.py` with your new tables, columns, or changes.
+
+### 2. Generate a Migration
+Run this command to auto-generate the migration script based on your changes:
+```bash
+alembic revision --autogenerate -m "add organization logo"
+```
+
+### 3. Review the Generated Migration
+**Never blindly trust `--autogenerate`.**
+Open the generated file in `alembic/versions/` and check that the commands (like `op.add_column(...)`) look correct and exactly match your intent.
+
+### 4. Apply the Migration
+Apply the migration to your active database:
+```bash
+alembic upgrade head
+```
+
+### 5. Commit Both Files
+Commit both your modified `database.py` and the newly generated `alembic/versions/xxxx.py` file in the same Pull Request to keep the schema and migrations in sync.

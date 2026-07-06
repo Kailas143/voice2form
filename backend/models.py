@@ -106,3 +106,33 @@ class WorkspaceUpdatePayload(BaseModel):
 
 class OrganizationSwitchPayload(BaseModel):
     organization_id: str
+
+class NotificationPreferencePayload(BaseModel):
+    email_product_updates: bool
+    email_subscription_billing: bool
+    email_security_alerts: bool
+    email_marketing: bool
+    
+    inapp_product_updates: bool
+    inapp_subscription_billing: bool
+    inapp_security_alerts: bool
+    inapp_marketing: bool
+
+class NotificationResponse(BaseModel):
+    id: str
+    title: str
+    message: str
+    type: str
+    channel: str
+    is_read: bool
+    action_url: str | None = None
+    metadata_data: dict | None = None
+    created_at: str
+
+class NotificationListResponse(BaseModel):
+    notifications: list[NotificationResponse]
+    total_count: int
+    page: int
+    page_size: int
+    total_pages: int
+

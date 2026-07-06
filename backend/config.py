@@ -7,6 +7,7 @@ load_dotenv(dotenv_path=env_path)
 SARVAM_API_KEY = os.getenv("SARVAM_API_KEY", "")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 DEEPGRAM_API_KEY = os.getenv("DEEPGRAM_API_KEY", "")
+RESEND_API_KEY = os.getenv("RESEND_API_KEY", "")
 DATABASE_URL = os.getenv("DATABASE_URL", "")
 GOOGLE_OAUTH_CREDENTIALS_PATH = os.getenv(
     "GOOGLE_OAUTH_CREDENTIALS_PATH", 

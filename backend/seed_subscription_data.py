@@ -48,9 +48,9 @@ async def seed():
         
         print("Seeding limits...")
         limits_data = {
-            "Free": {"forms_limit": 3, "submissions": 50},
-            "Professional": {"forms_limit": -1, "submissions": 1000},
-            "Business": {"forms_limit": -1, "submissions": 10000},
+            "Free": {"forms_limit": 3, "submissions": 100, "audio_minutes": 10},
+            "Professional": {"forms_limit": -1, "submissions": 1000, "audio_minutes": 500},
+            "Business": {"forms_limit": -1, "submissions": 10000, "audio_minutes": 5000},
         }
         
         for plan_name, limits in limits_data.items():
@@ -65,11 +65,13 @@ async def seed():
                 if not limit_obj:
                     limit_obj = DbPlanLimit(id=uuid4(), plan_id=plan.id, key=key, value=value)
                     db.add(limit_obj)
+                else:
+                    limit_obj.value = value
         await db.commit()
         
         print("Seeding plan features (defaults)...")
         plan_features = {
-            "Free": ["LIVE_VOICE", "GOOGLE_SHEETS"],
+            "Free": ["LIVE_VOICE", "AUDIO_UPLOAD", "GOOGLE_SHEETS"],
             "Professional": ["LIVE_VOICE", "AUDIO_UPLOAD", "GOOGLE_SHEETS", "MULTILINGUAL"],
             "Business": feature_codes
         }

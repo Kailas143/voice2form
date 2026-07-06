@@ -1,7 +1,7 @@
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
 from sqlalchemy.orm import declarative_base, Mapped, mapped_column, relationship
 from sqlalchemy.dialects.postgresql import JSONB, UUID
-from sqlalchemy import String, DateTime, Boolean, func, text, Numeric, Integer, ForeignKey
+from sqlalchemy import String, DateTime, Boolean, func, text, Numeric, Integer, ForeignKey, Index
 import uuid
 from enum import Enum
 
@@ -44,6 +44,14 @@ class DbPlanLimit(Base):
 class OrganizationType(str, Enum):
     PERSONAL = "personal"
     BUSINESS = "business"
+
+class NotificationType(str, Enum):
+    BILLING = "billing"
+    USAGE = "usage"
+    SECURITY = "security"
+    PRODUCT = "product"
+    MARKETING = "marketing"
+    SYSTEM = "system"
 
 class DbOrganization(Base):
     __tablename__ = "organizations"
@@ -156,6 +164,41 @@ class DbLlmLog(Base):
     token_usage: Mapped[dict] = mapped_column(type_=JSONB)
     latency_ms: Mapped[int] = mapped_column()
     created_at: Mapped[DateTime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+class DbUserNotificationPreference(Base):
+    __tablename__ = "user_notification_preferences"
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[int] = mapped_column(ForeignKey("user_auth.id"), unique=True)
+    
+    email_product_updates: Mapped[bool] = mapped_column(Boolean, default=True)
+    email_subscription_billing: Mapped[bool] = mapped_column(Boolean, default=True)
+    email_security_alerts: Mapped[bool] = mapped_column(Boolean, default=True)
+    email_marketing: Mapped[bool] = mapped_column(Boolean, default=False)
+    
+    inapp_product_updates: Mapped[bool] = mapped_column(Boolean, default=True)
+    inapp_subscription_billing: Mapped[bool] = mapped_column(Boolean, default=True)
+    inapp_security_alerts: Mapped[bool] = mapped_column(Boolean, default=True)
+    inapp_marketing: Mapped[bool] = mapped_column(Boolean, default=True)
+    
+    updated_at: Mapped[DateTime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+class DbNotification(Base):
+    __tablename__ = "notifications"
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[int] = mapped_column(ForeignKey("user_auth.id"))
+    organization_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("organizations.id"), nullable=True)
+    title: Mapped[str] = mapped_column(String(255))
+    message: Mapped[str] = mapped_column(String(1024))
+    type: Mapped[NotificationType] = mapped_column(String(50))
+    channel: Mapped[str] = mapped_column(String(50), default="inapp")
+    is_read: Mapped[bool] = mapped_column(Boolean, default=False)
+    action_url: Mapped[str | None] = mapped_column(String(1024), nullable=True)
+    metadata_data: Mapped[dict | None] = mapped_column(type_=JSONB, nullable=True)
+    created_at: Mapped[DateTime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    
+    __table_args__ = (
+        Index("idx_notifications_user_read", "user_id", "is_read"),
+    )
     
 async def get_db():
     async with AsyncSessionLocal() as session:
@@ -163,69 +206,7 @@ async def get_db():
 
 async def init_db():
     async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-
-        # Backfill columns for existing deployments without requiring Alembic.
-        if engine.url.get_backend_name().startswith("postgresql"):
-            await conn.execute(text("ALTER TABLE IF EXISTS user_auth ADD COLUMN IF NOT EXISTS primary_provider VARCHAR(20)"))
-            await conn.execute(text("ALTER TABLE IF EXISTS user_auth ADD COLUMN IF NOT EXISTS google_avatar VARCHAR(1024)"))
-            await conn.execute(text("ALTER TABLE IF EXISTS user_auth ADD COLUMN IF NOT EXISTS google_linked BOOLEAN DEFAULT FALSE"))
-            await conn.execute(text("ALTER TABLE IF EXISTS user_auth ADD COLUMN IF NOT EXISTS current_organization_id UUID"))
-            await conn.execute(text("ALTER TABLE IF EXISTS user_auth ADD COLUMN IF NOT EXISTS reset_token_hash VARCHAR(128)"))
-            await conn.execute(text("ALTER TABLE IF EXISTS user_auth ADD COLUMN IF NOT EXISTS reset_token_expires_at TIMESTAMPTZ"))
-            await conn.execute(text("ALTER TABLE IF EXISTS user_auth ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT NOW()"))
-            await conn.execute(text("ALTER TABLE IF EXISTS user_auth ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW()"))
-
-            await conn.execute(text("UPDATE user_auth SET primary_provider = COALESCE(primary_provider, 'manual')"))
-            await conn.execute(text("UPDATE user_auth SET google_linked = CASE WHEN primary_provider = 'google' THEN TRUE ELSE COALESCE(google_linked, FALSE) END"))
-            await conn.execute(text("UPDATE user_auth SET created_at = COALESCE(created_at, NOW())"))
-            await conn.execute(text("UPDATE user_auth SET updated_at = COALESCE(updated_at, NOW())"))
-
-            await conn.execute(text("""
-            DO $$
-            BEGIN
-                IF EXISTS (
-                    SELECT 1
-                    FROM information_schema.columns
-                    WHERE table_name = 'user_auth' AND column_name = 'provider'
-                ) THEN
-                    EXECUTE 'UPDATE user_auth SET primary_provider = COALESCE(primary_provider, provider, ''manual'')';
-                END IF;
-
-                IF EXISTS (
-                    SELECT 1
-                    FROM information_schema.columns
-                    WHERE table_name = 'user_auth' AND column_name = 'avatar'
-                ) THEN
-                    EXECUTE 'UPDATE user_auth SET google_avatar = COALESCE(google_avatar, avatar)';
-                END IF;
-
-                IF EXISTS (
-                    SELECT 1
-                    FROM information_schema.columns
-                    WHERE table_name = 'user_auth' AND column_name = 'provider'
-                ) THEN
-                    EXECUTE 'UPDATE user_auth SET provider = COALESCE(provider, primary_provider, ''manual'')';
-                    EXECUTE 'ALTER TABLE user_auth ALTER COLUMN provider SET DEFAULT ''manual''';
-                    EXECUTE 'ALTER TABLE user_auth ALTER COLUMN provider DROP NOT NULL';
-                END IF;
-            END
-            $$;
-            """))
-
-            # Preserve compatibility by keeping old columns, but ensure a unique email index for linked identities.
-            await conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS ux_user_auth_email ON user_auth (email)"))
-
-            # Backfill workspace columns for incremental deployments.
-            await conn.execute(text("ALTER TABLE IF EXISTS workspaces ADD COLUMN IF NOT EXISTS is_pinned BOOLEAN DEFAULT FALSE"))
-            await conn.execute(text("ALTER TABLE IF EXISTS workspaces ADD COLUMN IF NOT EXISTS organization_id UUID"))
-
-            await conn.execute(text("ALTER TABLE IF EXISTS custom_templates ADD COLUMN IF NOT EXISTS organization_id UUID"))
-            await conn.execute(text("ALTER TABLE IF EXISTS recent_records ADD COLUMN IF NOT EXISTS organization_id UUID"))
-
-            # Backfill recent_records owner/source columns for incremental deployments.
-            await conn.execute(text("ALTER TABLE IF EXISTS recent_records ADD COLUMN IF NOT EXISTS owner_email VARCHAR(255)"))
-            await conn.execute(text("ALTER TABLE IF EXISTS recent_records ADD COLUMN IF NOT EXISTS owner_name VARCHAR(120)"))
-            await conn.execute(text("ALTER TABLE IF EXISTS recent_records ADD COLUMN IF NOT EXISTS source VARCHAR(30) DEFAULT 'recording'"))
-            await conn.execute(text("UPDATE recent_records SET owner_email = COALESCE(owner_email, user_email)"))
-            await conn.execute(text("UPDATE recent_records SET source = COALESCE(NULLIF(source, ''), 'recording')"))
+        # We now rely on Alembic for schema creation and migrations.
+        # This function is kept for backwards compatibility in the main app startup
+        # to ensure database connectivity.
+        pass

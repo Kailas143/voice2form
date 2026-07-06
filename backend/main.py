@@ -1,3 +1,4 @@
+from enum import Enum
 import os
 import uuid
 import logging
@@ -11,6 +12,7 @@ import asyncio
 import json
 import websockets
 import jwt
+import resend
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile, Depends, WebSocket, WebSocketDisconnect
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -18,7 +20,7 @@ from sqlalchemy.future import select
 from sqlalchemy import desc, delete, func
 from pydantic import BaseModel
 
-from database import init_db, get_db, AsyncSessionLocal, DbCustomTemplate, DbTokenStore, DbUserAuth, DbRecentRecord, DbWorkspace, DbLlmLog, DbOrganization, DbPlan, DbOrganizationMember, OrganizationType
+from database import init_db, get_db, AsyncSessionLocal, DbCustomTemplate, DbTokenStore, DbUserAuth, DbRecentRecord, DbWorkspace, DbLlmLog, DbOrganization, DbPlan, DbOrganizationMember, OrganizationType, DbSubscription, DbUserNotificationPreference, DbNotification, NotificationType
 from fastapi.middleware.cors import CORSMiddleware
 
 from config import (
@@ -29,6 +31,7 @@ from config import (
     JWT_EXPIRE_MINUTES,
     PASSWORD_RESET_EXPIRE_MINUTES,
     DEEPGRAM_API_KEY,
+    RESEND_API_KEY,
 )
 from models import (
     ExtractionResult,
@@ -44,10 +47,13 @@ from models import (
     WorkspaceCreatePayload,
     WorkspaceUpdatePayload,
     OrganizationSwitchPayload,
+    NotificationPreferencePayload,
+    NotificationResponse,
+    NotificationListResponse,
 )
 from services import gemini, sarvam, sheets
 from services.access import has_feature, get_limit
-from services.usage import get_or_create_usage_metric
+from services.usage import get_or_create_usage_metric, increment_audio_minutes, increment_submissions
 from templates.registry import (
     get_template,
     list_templates,
@@ -171,7 +177,7 @@ def get_current_org(
 
 def require_feature(feature_code: str):
     async def dependency(
-        org_id: UUID = Depends(get_current_org),
+        org_id: uuid.UUID = Depends(get_current_org),
         db: AsyncSession = Depends(get_db)
     ):
         org = await db.execute(select(DbOrganization).where(DbOrganization.id == org_id))
@@ -199,7 +205,7 @@ def require_feature(feature_code: str):
 
 def require_limit(limit_key: str):
     async def dependency(
-        org_id: UUID = Depends(get_current_org),
+        org_id: uuid.UUID = Depends(get_current_org),
         db: AsyncSession = Depends(get_db)
     ):
         org = await db.execute(select(DbOrganization).where(DbOrganization.id == org_id))
@@ -326,9 +332,14 @@ def _pick_record_name(fields: dict[str, str]) -> str:
 
 async def _provision_new_user_organization(user: DbUserAuth, db: AsyncSession):
     await db.flush()
+
+    free_plan = await db.execute(select(DbPlan).where(DbPlan.name == "Free"))
+    free_plan_obj = free_plan.scalars().first()
+
     org = DbOrganization(
         name=f"{user.name.split()[0]}'s Workspace",
         organization_type=OrganizationType.PERSONAL,
+        current_plan_id=free_plan_obj.id if free_plan_obj else None
     )
     db.add(org)
     await db.flush()
@@ -339,9 +350,57 @@ async def _provision_new_user_organization(user: DbUserAuth, db: AsyncSession):
         role="owner"
     )
     db.add(member)
+    
+    if free_plan_obj:
+        subscription = DbSubscription(
+            organization_id=org.id,
+            plan_id=free_plan_obj.id,
+            status="active"
+        )
+        db.add(subscription)
+
     user.current_organization_id = org.id
 
-
+async def _send_welcome_email(email: str, name: str):
+    if not RESEND_API_KEY:
+        return
+    try:
+        resend.api_key = RESEND_API_KEY
+        html_content = f"""
+        <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
+            <h2>Welcome to V2F, {name}! 🎉</h2>
+            <p>V2F is proudly built by <a href="https://www.aurvyz.com">Aurvyz AI</a>. Thank you for joining the V2F family.</p>
+            <p>We're thrilled to have you on board. You have automatically been enrolled in our <strong>Free Plan</strong>.</p>
+            
+            <h3>Core Features to Explore:</h3>
+            <ul>
+                <li><strong>Live Voice-to-Form:</strong> Speak naturally and let AI perfectly fill out your forms.</li>
+                <li><strong>Multi-Language Support:</strong> Seamlessly speak in English or various regional languages.</li>
+                <li><strong>Audio Uploads:</strong> Upload existing audio files for offline extraction.</li>
+                <li><strong>Google Sheets Sync:</strong> Automatically send your structured data directly to Sheets.</li>
+            </ul>
+            
+            <h3>Your Privacy Matters</h3>
+            <p style="font-size: 13px; color: #555;">
+                Your privacy is our highest priority. Your data is encrypted and we do <strong>not</strong> use your personal form data to train our AI models. You maintain full control over your data and notifications within your Account Settings.
+            </p>
+            
+            <p>Let's get started!</p>
+            <p><strong>The Voice2Form Team</strong></p>
+        </div>
+        """
+        # Run synchronous resend call in a thread pool to avoid blocking the async event loop
+        await asyncio.to_thread(
+            resend.Emails.send,
+            {
+                "from": "Voice2Form <welcome@aurvyz.com>",
+                "to": [email],
+                "subject": "Welcome to Voice2Form! 🎉",
+                "html": html_content
+            }
+        )
+    except Exception as e:
+        logging.error(f"Failed to send welcome email to {email}: {e}")
 
 @app.post("/api/auth/manual/signup", response_model=AuthResponse)
 async def manual_signup(payload: ManualSignupPayload, db: AsyncSession = Depends(get_db)):
@@ -388,6 +447,10 @@ async def manual_signup(payload: ManualSignupPayload, db: AsyncSession = Depends
     await _provision_new_user_organization(user, db)
     await db.commit()
     await db.refresh(user)
+    
+    # Send welcome email asynchronously
+    asyncio.create_task(_send_welcome_email(user.email, user.name))
+    
     return _auth_response(user)
 
 
@@ -425,6 +488,8 @@ async def google_login(payload: GoogleLoginPayload, db: AsyncSession = Depends(g
 
     existing = await db.execute(select(DbUserAuth).where(DbUserAuth.email == email))
     user = existing.scalars().first()
+    is_new_user = False
+    
     if user:
         user.name = name
         user.google_avatar = avatar
@@ -432,6 +497,7 @@ async def google_login(payload: GoogleLoginPayload, db: AsyncSession = Depends(g
         if not user.primary_provider:
             user.primary_provider = "google"
     else:
+        is_new_user = True
         user = DbUserAuth(
             primary_provider="google",
             name=name,
@@ -446,6 +512,10 @@ async def google_login(payload: GoogleLoginPayload, db: AsyncSession = Depends(g
 
     await db.commit()
     await db.refresh(user)
+    
+    if is_new_user:
+        asyncio.create_task(_send_welcome_email(user.email, user.name))
+        
     return _auth_response(user)
 
 
@@ -988,6 +1058,10 @@ async def transcribe_and_extract(
     db: AsyncSession = Depends(get_db),
     current_org: uuid.UUID | None = Depends(get_optional_current_org),
 ):
+    if current_org:
+        # Check audio_minutes limit if authenticated
+        limit_check = require_limit("audio_minutes")
+        await limit_check(current_org, db)
     template_data = await _resolve_template(template_id, template, db, current_org)
     selected_language = validate_language(language, SUPPORTED_LANGUAGES)
 
@@ -1099,6 +1173,12 @@ async def transcribe_and_extract(
 
     result = gemini.extract(transcript, template_data.fields)
     await _log_llm_usage(db, "gemini-2.5-flash", "extraction", result.llm_usage, result.latency_ms)
+    
+    if current_org:
+        # MVP heuristic: 1 minute = roughly 2MB in wav/webm mono, but we just use max(1, size/2000000)
+        minutes = max(1, audio.size // 2_000_000) if audio.size else 1
+        await increment_audio_minutes(db, current_org, minutes)
+        
     await db.commit()
     if not result.transcript:
         raise HTTPException(status_code=502, detail="No speech detected. Is audio clear? Try again.")
@@ -1295,6 +1375,7 @@ async def submit_form(
     payload: SubmitPayload,
     db: AsyncSession = Depends(get_db),
     current_user: DbUserAuth = Depends(_get_current_user),
+    org_id: uuid.UUID = Depends(require_limit("submissions")),
 ):
     template_data = payload.template or await _resolve_template(payload.template_id, None, db, current_user.current_organization_id)
     sheet_category = template_data.category if payload.template is None else "Custom"
@@ -1344,6 +1425,8 @@ async def submit_form(
         status="Processed"
     )
     db.add(recent_record)
+    
+    await increment_submissions(db, current_user.current_organization_id, 1)
     await db.commit()
 
     return {
@@ -1352,3 +1435,327 @@ async def submit_form(
         "sheet_url": sheet_url,
         "audio_retained": False,
     }
+
+@app.get("/api/plans/current")
+async def get_current_plan(
+    db: AsyncSession = Depends(get_db),
+    current_org: uuid.UUID = Depends(get_current_org)
+):
+    org = await db.execute(select(DbOrganization).where(DbOrganization.id == current_org))
+    org = org.scalars().first()
+    plan_id = org.current_plan_id
+    if not plan_id:
+        free_plan = await db.execute(select(DbPlan).where(DbPlan.name == "Free"))
+        free_plan_obj = free_plan.scalars().first()
+        plan_id = free_plan_obj.id if free_plan_obj else None
+        
+    if not plan_id:
+        raise HTTPException(status_code=404, detail="No plan found.")
+        
+    plan = await db.execute(select(DbPlan).where(DbPlan.id == plan_id))
+    plan_obj = plan.scalars().first()
+    
+    return {
+        "status": "ok",
+        "plan": {
+            "name": plan_obj.name,
+            "slug": plan_obj.slug,
+            "price": float(plan_obj.price)
+        }
+    }
+
+@app.get("/api/plans/usage")
+async def get_plan_usage(
+    db: AsyncSession = Depends(get_db),
+    current_org: uuid.UUID = Depends(get_current_org)
+):
+    now = datetime.now(timezone.utc)
+    metric = await get_or_create_usage_metric(db, current_org, now.month, now.year)
+    
+    org = await db.execute(select(DbOrganization).where(DbOrganization.id == current_org))
+    org_obj = org.scalars().first()
+    
+    submissions_limit = await get_limit(db, org_obj.current_plan_id, "submissions")
+    audio_minutes_limit = await get_limit(db, org_obj.current_plan_id, "audio_minutes")
+    
+    return {
+        "status": "ok",
+        "usage": {
+            "submissions": metric.submissions_used,
+            "submissions_limit": submissions_limit or -1,
+            "audio_minutes": metric.audio_minutes_used,
+            "audio_minutes_limit": audio_minutes_limit or -1,
+        }
+    }
+
+class SimulateUpgradePayload(BaseModel):
+    target_plan_slug: str
+    admin_secret: str
+
+@app.post("/api/admin/simulate-upgrade")
+async def simulate_upgrade(
+    payload: SimulateUpgradePayload,
+    db: AsyncSession = Depends(get_db),
+    current_org: uuid.UUID = Depends(get_current_org)
+):
+    if payload.admin_secret != "dev_secret":
+        raise HTTPException(status_code=403, detail="Unauthorized")
+        
+    plan = await db.execute(select(DbPlan).where(DbPlan.slug == payload.target_plan_slug))
+    plan_obj = plan.scalars().first()
+    if not plan_obj:
+        raise HTTPException(status_code=404, detail="Plan not found")
+        
+    org = await db.execute(select(DbOrganization).where(DbOrganization.id == current_org))
+    org_obj = org.scalars().first()
+    org_obj.current_plan_id = plan_obj.id
+    
+    # Update subscription
+    sub = await db.execute(select(DbSubscription).where(DbSubscription.organization_id == current_org))
+    sub_obj = sub.scalars().first()
+    if sub_obj:
+        sub_obj.plan_id = plan_obj.id
+    else:
+        new_sub = DbSubscription(organization_id=current_org, plan_id=plan_obj.id, status="active")
+        db.add(new_sub)
+        
+    await db.commit()
+    return {"status": "ok", "message": f"Upgraded to {plan_obj.name}"}
+
+
+@app.post("/api/admin/simulate-downgrade")
+async def simulate_downgrade(
+    payload: dict,
+    db: AsyncSession = Depends(get_db),
+    org_id: uuid.UUID = Depends(get_current_org)
+):
+    admin_secret = payload.get("admin_secret")
+    if admin_secret != "dev_secret":
+        raise HTTPException(status_code=403, detail="Invalid admin secret.")
+        
+    target_plan_slug = payload.get("target_plan_slug", "free")
+    target_plan = await db.execute(select(DbPlan).where(DbPlan.slug == target_plan_slug))
+    target_plan = target_plan.scalars().first()
+    
+    if not target_plan:
+        raise HTTPException(status_code=404, detail="Target plan not found.")
+        
+    org = await db.execute(select(DbOrganization).where(DbOrganization.id == org_id))
+    org = org.scalars().first()
+    if not org:
+        raise HTTPException(status_code=404, detail="Organization not found.")
+        
+    org.current_plan_id = target_plan.id
+    
+    sub = await db.execute(select(DbSubscription).where(DbSubscription.organization_id == org_id))
+    sub = sub.scalars().first()
+    if sub:
+        sub.plan_id = target_plan.id
+        sub.status = "active"
+        
+    await db.commit()
+    
+    # Notify user of downgrade
+    org_member = await db.execute(select(DbOrganizationMember).where(DbOrganizationMember.organization_id == org_id).where(DbOrganizationMember.role == "owner"))
+    owner = org_member.scalars().first()
+    if owner:
+        await send_notification(
+            db=db,
+            user_id=owner.user_id,
+            type=NotificationType.BILLING,
+            title="Plan Downgraded",
+            message=f"Your workspace plan has been changed to {target_plan.name}.",
+            organization_id=org_id
+        )
+    
+    return {"status": "ok", "message": f"Successfully downgraded to {target_plan.name}"}
+
+
+# -------------------------------------------------------------------
+# NOTIFICATIONS
+# -------------------------------------------------------------------
+
+async def send_notification(
+    db: AsyncSession,
+    user_id: int,
+    type: NotificationType,
+    title: str,
+    message: str,
+    channel: str = "inapp",
+    metadata_data: dict = None,
+    action_url: str = None,
+    organization_id: uuid.UUID = None
+):
+    if channel == "email":
+        pref = await db.execute(select(DbUserNotificationPreference).where(DbUserNotificationPreference.user_id == user_id))
+        pref = pref.scalars().first()
+        if pref:
+            if type == NotificationType.PRODUCT and not pref.email_product_updates:
+                return
+            if type == NotificationType.BILLING and not pref.email_subscription_billing:
+                return
+            if type == NotificationType.SECURITY and not pref.email_security_alerts:
+                return
+            if type == NotificationType.MARKETING and not pref.email_marketing:
+                return
+
+        # Fetch user's email address
+        user = await db.execute(select(DbUserAuth).where(DbUserAuth.id == user_id))
+        user = user.scalars().first()
+        
+        if user and user.email and RESEND_API_KEY:
+            resend.api_key = RESEND_API_KEY
+            try:
+                resend.Emails.send({
+                    "from": "Voice2Form <notifications@aurvyz.com>",
+                    "to": [user.email],
+                    "subject": title,
+                    "html": f"<p>{message}</p><br/>{f'<p><a href={action_url}>View Details</a></p>' if action_url else ''}"
+                })
+            except Exception as e:
+                logging.error(f"Failed to send email notification: {e}")
+
+    elif channel == "inapp":
+        pref = await db.execute(select(DbUserNotificationPreference).where(DbUserNotificationPreference.user_id == user_id))
+        pref = pref.scalars().first()
+        if pref:
+            if type == NotificationType.PRODUCT and not pref.inapp_product_updates:
+                return
+            if type == NotificationType.BILLING and not pref.inapp_subscription_billing:
+                return
+            if type == NotificationType.SECURITY and not pref.inapp_security_alerts:
+                return
+            if type == NotificationType.MARKETING and not pref.inapp_marketing:
+                return
+
+    notif = DbNotification(
+        user_id=user_id,
+        organization_id=organization_id,
+        title=title,
+        message=message,
+        type=type,
+        channel=channel,
+        action_url=action_url,
+        metadata_data=metadata_data
+    )
+    db.add(notif)
+    await db.commit()
+    return notif
+
+@app.get("/api/notifications/preferences")
+async def get_notification_preferences(
+    current_user: DbUserAuth = Depends(_get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    user_id = current_user.id
+    pref = await db.execute(select(DbUserNotificationPreference).where(DbUserNotificationPreference.user_id == user_id))
+    pref = pref.scalars().first()
+    
+    if not pref:
+        pref = DbUserNotificationPreference(user_id=user_id)
+        db.add(pref)
+        await db.commit()
+        await db.refresh(pref)
+        
+    return {
+        "email_product_updates": pref.email_product_updates,
+        "email_subscription_billing": pref.email_subscription_billing,
+        "email_security_alerts": pref.email_security_alerts,
+        "email_marketing": pref.email_marketing,
+        "inapp_product_updates": pref.inapp_product_updates,
+        "inapp_subscription_billing": pref.inapp_subscription_billing,
+        "inapp_security_alerts": pref.inapp_security_alerts,
+        "inapp_marketing": pref.inapp_marketing
+    }
+
+@app.put("/api/notifications/preferences")
+async def update_notification_preferences(
+    payload: NotificationPreferencePayload,
+    current_user: DbUserAuth = Depends(_get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    user_id = current_user.id
+    pref = await db.execute(select(DbUserNotificationPreference).where(DbUserNotificationPreference.user_id == user_id))
+    pref = pref.scalars().first()
+    
+    if not pref:
+        pref = DbUserNotificationPreference(user_id=user_id)
+        db.add(pref)
+        
+    pref.email_product_updates = payload.email_product_updates
+    pref.email_subscription_billing = payload.email_subscription_billing
+    pref.email_security_alerts = payload.email_security_alerts
+    pref.email_marketing = payload.email_marketing
+    pref.inapp_product_updates = payload.inapp_product_updates
+    pref.inapp_subscription_billing = payload.inapp_subscription_billing
+    pref.inapp_security_alerts = payload.inapp_security_alerts
+    pref.inapp_marketing = payload.inapp_marketing
+    
+    await db.commit()
+    return {"status": "ok", "message": "Preferences updated successfully."}
+
+@app.get("/api/notifications/unread-count")
+async def get_unread_notification_count(
+    current_user: DbUserAuth = Depends(_get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    user_id = current_user.id
+    count_query = select(func.count(DbNotification.id)).where(DbNotification.user_id == user_id).where(DbNotification.is_read == False)
+    result = await db.execute(count_query)
+    count = result.scalar()
+    return {"count": count or 0}
+
+@app.get("/api/notifications")
+async def get_notifications(
+    page: int = 1,
+    page_size: int = 20,
+    current_user: DbUserAuth = Depends(_get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    user_id = current_user.id
+    
+    offset = (page - 1) * page_size
+    query = select(DbNotification).where(DbNotification.user_id == user_id).order_by(DbNotification.created_at.desc()).offset(offset).limit(page_size)
+    result = await db.execute(query)
+    notifications = result.scalars().all()
+    
+    count_query = select(func.count(DbNotification.id)).where(DbNotification.user_id == user_id)
+    count_result = await db.execute(count_query)
+    total_count = count_result.scalar() or 0
+    
+    return {
+        "status": "ok",
+        "notifications": [
+            {
+                "id": str(n.id),
+                "title": n.title,
+                "message": n.message,
+                "type": n.type.value if isinstance(n.type, Enum) else n.type,
+                "channel": n.channel,
+                "is_read": n.is_read,
+                "action_url": n.action_url,
+                "metadata_data": n.metadata_data,
+                "created_at": n.created_at.isoformat() if n.created_at else None
+            } for n in notifications
+        ],
+        "total_count": total_count,
+        "page": page,
+        "page_size": page_size,
+        "total_pages": (total_count + page_size - 1) // page_size
+    }
+
+@app.put("/api/notifications/{notification_id}/read")
+async def mark_notification_read(
+    notification_id: str,
+    current_user: DbUserAuth = Depends(_get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    user_id = current_user.id
+    notif = await db.execute(select(DbNotification).where(DbNotification.id == notification_id).where(DbNotification.user_id == user_id))
+    notif = notif.scalars().first()
+    if not notif:
+        raise HTTPException(status_code=404, detail="Notification not found")
+        
+    notif.is_read = True
+    await db.commit()
+    return {"status": "ok"}

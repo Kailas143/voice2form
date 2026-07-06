@@ -12,3 +12,5 @@ pypdf
 python-docx
 PyJWT
 websockets==16.0
+alembic==1.18.5
+resend==2.32.2

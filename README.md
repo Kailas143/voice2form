@@ -143,3 +143,28 @@ npm run build
 
 - Backend app import check passed from `backend/`
 - Frontend production build passed from `frontend/`
+
+## Notifications Architecture
+
+Voice2Form includes a highly configurable, granular Notification Engine designed for SaaS platforms.
+
+### Features
+The notification system is deeply integrated across the platform to track events such as:
+- **Billing & Subscription:** Plan upgrades/downgrades, trial expirations, failed payments, and upcoming renewals.
+- **Usage Limits:** Quota alerts triggered dynamically when users hit 80%, 95%, or 100% of their form submissions or audio transcription limits.
+- **Product Updates:** System-wide announcements for new feature releases (e.g., new language models).
+- **Security:** Critical alerts such as new unrecognized logins or password resets (In-app security alerts cannot be disabled).
+
+### Architecture Details
+- **Channel-Specific Granularity:** Instead of global toggles, users have precise control over **In-App** and **Email** channels per category (Product, Billing, Security, Marketing).
+- **In-App Bell UI:** A responsive Bell icon in the main workspace header actively polls for unread notifications, displaying a live badge and an interactive dropdown to manage alerts.
+- **Backend Enforcement:** A centralized `send_notification` utility in `main.py` intercepts all system events, verifies the user's specific `DbUserNotificationPreference` opt-ins, and logs structured data (including JSON metadata and actionable URLs) into the `DbNotification` table via SQLAlchemy.
+
+Backend notification endpoints:
+```bash
+GET /api/notifications/preferences
+PUT /api/notifications/preferences
+GET /api/notifications/unread-count
+GET /api/notifications
+PUT /api/notifications/{notification_id}/read
+```
