@@ -48,7 +48,7 @@ export async function transcribeAudio({ audioFile, templateId, template, languag
   return parseResponse(response, "Could not transcribe audio. Please try again.");
 }
 
-export async function submitRecord({ templateId, template, fields, language, accessToken, targetSheetUrl, submissionSource, sessionToken }) {
+export async function submitRecord({ templateId, workspaceId, template, fields, language, accessToken, targetSheetUrl, submissionSource, sessionToken }) {
   const response = await fetch(`${API_BASE_URL}/api/submit`, {
     method: "POST",
     headers: {
@@ -57,6 +57,7 @@ export async function submitRecord({ templateId, template, fields, language, acc
     },
     body: JSON.stringify({
       template_id: templateId,
+      workspace_id: workspaceId,
       template: templateId ? null : template,
       fields,
       language,
@@ -321,3 +322,53 @@ export async function markNotificationRead(sessionToken, notificationId) {
   return parseResponse(response, "Could not mark notification read.");
 }
 
+export async function fetchWorkspaceIntegrations(workspaceId, sessionToken) {
+  const response = await fetch(`${API_BASE_URL}/api/workspaces/${workspaceId}/integrations`, {
+    headers: { Authorization: `Bearer ${sessionToken}` }
+  });
+  return parseResponse(response, "Could not fetch integrations.");
+}
+
+export async function addWorkspaceIntegration(workspaceId, payload, sessionToken) {
+  const response = await fetch(`${API_BASE_URL}/api/workspaces/${workspaceId}/integrations`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${sessionToken}`
+    },
+    body: JSON.stringify(payload)
+  });
+  return parseResponse(response, "Could not add integration.");
+}
+
+export async function updateWorkspaceIntegration(workspaceId, integrationId, payload, sessionToken) {
+  const response = await fetch(`${API_BASE_URL}/api/workspaces/${workspaceId}/integrations/${integrationId}`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${sessionToken}`
+    },
+    body: JSON.stringify(payload)
+  });
+  return parseResponse(response, "Could not update integration.");
+}
+
+export async function deleteWorkspaceIntegration(workspaceId, integrationId, sessionToken) {
+  const response = await fetch(`${API_BASE_URL}/api/workspaces/${workspaceId}/integrations/${integrationId}`, {
+    method: "DELETE",
+    headers: { Authorization: `Bearer ${sessionToken}` }
+  });
+  return parseResponse(response, "Could not delete integration.");
+}
+
+export async function connectSlackOAuthApi(workspaceId, code, redirectUri, sessionToken) {
+  const response = await fetch(`${API_BASE_URL}/api/workspaces/${workspaceId}/integrations/slack/oauth`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${sessionToken}`
+    },
+    body: JSON.stringify({ code, redirect_uri: redirectUri })
+  });
+  return parseResponse(response, "Could not connect to Slack.");
+}

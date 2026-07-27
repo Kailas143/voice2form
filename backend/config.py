@@ -24,6 +24,8 @@ JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "change-this-to-a-secure-secret-in-
 JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
 JWT_EXPIRE_MINUTES = int(os.getenv("JWT_EXPIRE_MINUTES", "43200"))
 PASSWORD_RESET_EXPIRE_MINUTES = int(os.getenv("PASSWORD_RESET_EXPIRE_MINUTES", "30"))
+SLACK_CLIENT_ID = os.getenv("SLACK_CLIENT_ID", "dummy_slack_client_id")
+SLACK_CLIENT_SECRET = os.getenv("SLACK_CLIENT_SECRET", "dummy_slack_client_secret")
 
 ALLOWED_AUDIO_TYPES = {
     "audio/wav",

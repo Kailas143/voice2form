@@ -14,13 +14,12 @@ export default function ApiSettingsSection({ currentPlan }) {
             </div>
             <button className="btn btn-primary btn-sm" disabled={isFree}>Generate New Key</button>
           </div>
-          
+
           {isFree ? (
             <div className="bg-base-200/50 rounded-lg p-6 text-center border border-dashed border-base-300">
               <span className="text-3xl mb-2 block">🔒</span>
               <h4 className="font-bold mb-1">API Access Restricted</h4>
-              <p className="text-sm text-base-content/60 mb-4">API access and Webhooks are only available on the Professional plan and above.</p>
-              <button className="btn btn-outline btn-primary btn-sm">Upgrade Plan</button>
+              <p className="text-sm text-base-content/60 mb-4">API access and Webhooks will be available soon.</p>
             </div>
           ) : (
             <div className="overflow-x-auto">
@@ -54,7 +53,7 @@ export default function ApiSettingsSection({ currentPlan }) {
             </div>
             <button className="btn btn-outline btn-sm" disabled>Add Endpoint</button>
           </div>
-          
+
           <div className="bg-base-200/30 rounded-lg p-4 text-center border border-base-200">
             <p className="text-xs text-base-content/50 font-medium">Coming Soon</p>
           </div>

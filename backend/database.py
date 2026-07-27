@@ -140,6 +140,28 @@ class DbWorkspace(Base):
     last_opened_at: Mapped[DateTime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
+class DbWorkspaceIntegration(Base):
+    __tablename__ = "workspace_integrations"
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    workspace_id: Mapped[str] = mapped_column(ForeignKey("workspaces.id", ondelete="CASCADE"), index=True)
+    provider: Mapped[str] = mapped_column(String(50), nullable=False)
+    credentials: Mapped[dict | None] = mapped_column(type_=JSONB, nullable=True)
+    config: Mapped[dict | None] = mapped_column(type_=JSONB, nullable=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[DateTime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[DateTime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
+class DbIntegrationExecution(Base):
+    __tablename__ = "integration_executions"
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    workspace_id: Mapped[str] = mapped_column(ForeignKey("workspaces.id", ondelete="CASCADE"), index=True)
+    integration_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("workspace_integrations.id", ondelete="CASCADE"), index=True)
+    event: Mapped[str] = mapped_column(String(100), nullable=False)
+    status: Mapped[str] = mapped_column(String(50), nullable=False)
+    error: Mapped[str | None] = mapped_column(String, nullable=True)
+    created_at: Mapped[DateTime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
 class DbUserAuth(Base):
     __tablename__ = "user_auth"
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)

@@ -51,7 +51,7 @@ from models import (
     NotificationResponse,
     NotificationListResponse,
 )
-from services import gemini, sarvam, sheets
+from services import gemini, sarvam
 from services.access import has_feature, get_limit
 from services.usage import get_or_create_usage_metric, increment_audio_minutes, increment_submissions
 from templates.registry import (
@@ -61,7 +61,6 @@ from templates.registry import (
     parse_uploaded_template_json,
 )
 from utils.audio import validate_audio_upload, validate_language
-
 app = FastAPI(title="Voice2Form API")
 import logging
 
@@ -85,7 +84,7 @@ async def _periodic_cleanup():
             async with AsyncSessionLocal() as session:
                 cutoff = datetime.now(timezone.utc) - timedelta(days=30)
                 
-                await session.execute(delete(DbRecentRecord).where(DbRecentRecord.created_at < cutoff))
+                # await session.execute(delete(DbRecentRecord).where(DbRecentRecord.created_at < cutoff))
                 await session.execute(delete(DbLlmLog).where(DbLlmLog.created_at < cutoff))
                 
                 await session.commit()
@@ -1370,9 +1369,13 @@ async def stream_transcribe(websocket: WebSocket, db: AsyncSession = Depends(get
             pass
 
 
+from fastapi import BackgroundTasks
+from services.integrations.registry import dispatch_event_background
+
 @app.post("/api/submit")
 async def submit_form(
     payload: SubmitPayload,
+    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     current_user: DbUserAuth = Depends(_get_current_user),
     org_id: uuid.UUID = Depends(require_limit("submissions")),
@@ -1393,24 +1396,7 @@ async def submit_form(
         for field in template_data.fields
     }
 
-    try:
-        sheet_url = sheets.append_record(
-            form_name=template_data.name,
-            category=sheet_category,
-            fields=normalized_fields,
-            access_token=payload.access_token,
-            target_sheet_url=payload.target_sheet_url,
-        )
-    except RuntimeError as exc:
-        raise HTTPException(status_code=502, detail=str(exc)) from exc
-
-    if not sheet_url:
-        raise HTTPException(status_code=500, detail="Failed to write record to spreadsheet.")
-
     customer_name = _pick_record_name(normalized_fields)
-    
-    # We don't have exact confidences here in submit_form unless we change the payload
-    # MVP: we can assume 100 or use a placeholder, or maybe pass it. For now, 100.
     
     recent_record = DbRecentRecord(
         id=secrets.token_hex(8),
@@ -1429,10 +1415,32 @@ async def submit_form(
     await increment_submissions(db, current_user.current_organization_id, 1)
     await db.commit()
 
+    if payload.workspace_id:
+        background_tasks.add_task(
+            dispatch_event_background,
+            payload.workspace_id,
+            "submission.created",
+            {
+                "category": sheet_category,
+                "fields": normalized_fields,
+                "customer_name": customer_name
+            }
+        )
+    
+    if payload.access_token and payload.target_sheet_url:
+        # Fallback for old forms without workspace_id, or if they haven't migrated to the new integration system
+        from services.integrations.google_sheets import GoogleSheetsIntegration
+        background_tasks.add_task(
+            GoogleSheetsIntegration().handle_event,
+            "submission.created",
+            {"category": sheet_category, "fields": normalized_fields},
+            {"target_sheet_url": payload.target_sheet_url},
+            {"access_token": payload.access_token}
+        )
+
     return {
         "status": "submitted",
         "sheet_tab": sheet_category,
-        "sheet_url": sheet_url,
         "audio_retained": False,
     }
 
@@ -1475,8 +1483,14 @@ async def get_plan_usage(
     org = await db.execute(select(DbOrganization).where(DbOrganization.id == current_org))
     org_obj = org.scalars().first()
     
-    submissions_limit = await get_limit(db, org_obj.current_plan_id, "submissions")
-    audio_minutes_limit = await get_limit(db, org_obj.current_plan_id, "audio_minutes")
+    plan_id = org_obj.current_plan_id
+    if not plan_id:
+        free_plan = await db.execute(select(DbPlan).where(DbPlan.name == "Free"))
+        free_plan_obj = free_plan.scalars().first()
+        plan_id = free_plan_obj.id if free_plan_obj else None
+    
+    submissions_limit = await get_limit(db, plan_id, "submissions")
+    audio_minutes_limit = await get_limit(db, plan_id, "audio_minutes")
     
     return {
         "status": "ok",
@@ -1759,3 +1773,6 @@ async def mark_notification_read(
     notif.is_read = True
     await db.commit()
     return {"status": "ok"}
+
+from routers import integrations
+app.include_router(integrations.router)

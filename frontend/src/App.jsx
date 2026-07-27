@@ -32,7 +32,8 @@ import {
   fetchNotificationPreferences,
   fetchUnreadNotificationCount,
   fetchNotifications,
-  markNotificationRead
+  markNotificationRead,
+  connectSlackOAuthApi
 } from "./api";
 import { CATEGORY_ICONS, LANGUAGES, PROCESS_STAGES, STEPS } from "./constants";
 
@@ -451,6 +452,29 @@ export default function App() {
     });
   }, []);
 
+  useEffect(() => {
+    // Check for Slack OAuth redirect
+    const urlParams = new URLSearchParams(window.location.search);
+    const code = urlParams.get('code');
+    const state = urlParams.get('state');
+    
+    if (code && state && sessionToken) {
+      const redirectUri = window.location.origin; // Same as we passed to authorize
+      connectSlackOAuthApi(state, code, redirectUri, sessionToken)
+        .then(() => {
+          // Clean up URL
+          window.history.replaceState({}, document.title, "/");
+          // Open settings to the integrations tab to show success
+          setIsSettingsOpen(true);
+        })
+        .catch((err) => {
+          console.error("Failed to connect Slack via OAuth:", err);
+          window.history.replaceState({}, document.title, "/");
+          setErrorMessage("Failed to connect Slack account. Please try again.");
+        });
+    }
+  }, [sessionToken]);
+
   const fetchPlanData = async (token) => {
     try {
       const [planRes, usageRes] = await Promise.all([
@@ -554,7 +578,7 @@ export default function App() {
     }
     
     return (
-      <div className={`alert ${alertClass} rounded-xl mb-6 shadow-sm border border-base-300 flex items-center justify-between`}>
+      <div className={`alert ${alertClass} col-span-full rounded-xl mb-6 shadow-sm border border-base-300 flex items-center justify-between`}>
         <div className="flex items-center gap-3">
           <span className="text-xl">{icon}</span>
           <div>
@@ -1652,6 +1676,7 @@ export default function App() {
       setErrorMessage("");
       const payload = await submitRecord({
         templateId: templateSource === "builtin" ? selectedTemplate.id : null,
+        workspaceId: activeWorkspaceId,
         template: templateSource === "custom" ? selectedTemplate : null,
         fields,
         language,
@@ -1772,6 +1797,17 @@ export default function App() {
     setAudioMode("mic");
     setStep(3);
     setInWorkspace(false);
+  }
+
+  function handleBackToWorkspaces() {
+    setInWorkspace(false);
+    setActiveWorkspaceId("");
+    setActiveWorkspaceName("");
+    setSelectedTemplate(null);
+    setUploadedTemplateName("");
+    resetAudioAndExtraction();
+    setStep(1);
+    setHomeView("workspaces");
   }
 
   function handleBrowseTemplates() {
@@ -2540,6 +2576,15 @@ export default function App() {
         <div className="recording-workspace-shell fade-in-up">
           <header className="flex items-center justify-between bg-base-100 shadow-sm hover:shadow-md transition-shadow duration-300 rounded-2xl mb-6 px-5 py-3 border border-base-200">
             <div className="flex items-center gap-4">
+              <button 
+                onClick={handleBackToWorkspaces}
+                className="btn btn-circle btn-ghost btn-sm text-base-content/70 hover:bg-base-200 hover:text-base-content"
+                title="Back to Workspaces"
+              >
+                <svg viewBox="0 0 24 24" fill="none" className="w-5 h-5">
+                  <path d="M15 18l-6-6 6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </button>
               <img src="/small-logo.png" alt="V2F" className="flex-shrink-0 w-12 h-12 object-contain logo-sound-wave" />
               <div className="flex flex-col">
                 <h2 className="text-xl font-bold leading-tight text-base-content tracking-tight m-0">{workspaceName}</h2>
@@ -3631,6 +3676,7 @@ export default function App() {
           planUsage={planUsage}
           sessionToken={sessionToken}
           fetchPlanData={() => fetchPlanData(sessionToken)}
+          activeWorkspaceId={activeWorkspaceId}
         />
       )}
     </>

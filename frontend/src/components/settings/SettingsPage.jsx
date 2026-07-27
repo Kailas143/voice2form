@@ -28,7 +28,8 @@ export default function SettingsPage({
   currentPlan, 
   planUsage, 
   sessionToken,
-  fetchPlanData
+  fetchPlanData,
+  activeWorkspaceId
 }) {
   const [activeTab, setActiveTab] = useState('profile');
 
@@ -40,6 +41,7 @@ export default function SettingsPage({
         return (
           <SubscriptionSection 
             currentPlan={currentPlan} 
+            planUsage={planUsage}
             sessionToken={sessionToken} 
             fetchPlanData={fetchPlanData} 
           />
@@ -53,7 +55,7 @@ export default function SettingsPage({
       case 'notifications':
         return <NotificationsSection sessionToken={sessionToken} />;
       case 'integrations':
-        return <IntegrationsSection />;
+        return <IntegrationsSection sessionToken={sessionToken} activeWorkspaceId={activeWorkspaceId} />;
       case 'api':
         return <ApiSettingsSection currentPlan={currentPlan} />;
       case 'privacy':

@@ -36,6 +36,7 @@ class ExtractionResult(BaseModel):
 
 class SubmitPayload(BaseModel):
     template_id: str | None = None
+    workspace_id: str | None = None
     fields: dict[str, str]
     language: str = "hi-IN"
     template: Template | None = None
