@@ -1,0 +1,34 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: ./backend
+    container_name: voice2form_backend
+    restart: always
+    environment:
+      - ENV_MODE=production
+      # RDS connection should be provided via .env file or environment variables
+      - DATABASE_URL=${DATABASE_URL}
+      - SARVAM_API_KEY=${SARVAM_API_KEY}
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - DEEPGRAM_API_KEY=${DEEPGRAM_API_KEY}
+      - RESEND_API_KEY=${RESEND_API_KEY}
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+      - SLACK_CLIENT_ID=${SLACK_CLIENT_ID}
+      - SLACK_CLIENT_SECRET=${SLACK_CLIENT_SECRET}
+    volumes:
+      # Mount the Google Service Account JSON if you use it in production
+      - ./client_secret_174819089028-8j35h9rm02uddbpgppsgsgk8i8vqc7k0.apps.googleusercontent.com.json:/app/client_secret.json:ro
+    # If the app expects it at a specific path, you might need to set GOOGLE_OAUTH_CREDENTIALS_PATH=/app/client_secret.json
+
+  frontend:
+    build:
+      context: ./frontend
+    container_name: voice2form_frontend
+    restart: always
+    ports:
+      - "80:80"
+    depends_on:
+      - backend

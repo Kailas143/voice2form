@@ -1,0 +1,51 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:15-alpine
+    container_name: voice2form_local_db
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=password
+      - POSTGRES_DB=voice2form_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  backend:
+    build:
+      context: ./backend
+    container_name: voice2form_local_backend
+    environment:
+      - ENV_MODE=local
+      - DATABASE_URL=postgresql+asyncpg://postgres:password@db:5432/voice2form_db
+      # Add other necessary local ENV vars here or let them be picked up from .env if mapped
+    env_file:
+      - .env
+    ports:
+      - "8000:8000"
+    volumes:
+      # Mount backend code for hot reloading
+      - ./backend:/app
+    depends_on:
+      - db
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+
+  frontend:
+    build:
+      context: ./frontend
+    container_name: voice2form_local_frontend
+    # For local development we can just run the vite dev server
+    # overriding the Dockerfile command which is nginx
+    command: npm run dev -- --host 0.0.0.0
+    ports:
+      - "5173:5173"
+    environment:
+      - VITE_API_BASE_URL=http://localhost:8000
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+
+volumes:
+  pgdata:

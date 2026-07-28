@@ -5,9 +5,18 @@ from sqlalchemy import String, DateTime, Boolean, func, text, Numeric, Integer, 
 import uuid
 from enum import Enum
 
-from config import DATABASE_URL
+import ssl
+import os
+from config import DATABASE_URL, ENV_MODE
 
-engine = create_async_engine(DATABASE_URL, echo=False)
+engine_kwargs = {"echo": False}
+if ENV_MODE == "production":
+    ssl_context = ssl.create_default_context(cafile=os.path.join(os.path.dirname(__file__), "global-bundle.pem"))
+    ssl_context.check_hostname = True
+    ssl_context.verify_mode = ssl.CERT_REQUIRED
+    engine_kwargs["connect_args"] = {"ssl": ssl_context}
+
+engine = create_async_engine(DATABASE_URL, **engine_kwargs)
 AsyncSessionLocal = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
 Base = declarative_base()
 
