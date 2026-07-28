@@ -10,7 +10,7 @@ import os
 from config import DATABASE_URL, ENV_MODE
 
 engine_kwargs = {"echo": False}
-if ENV_MODE == "production":
+if os.getenv("DB_REQUIRE_SSL", "false").lower() == "true":
     ssl_context = ssl.create_default_context(cafile=os.path.join(os.path.dirname(__file__), "global-bundle.pem"))
     ssl_context.check_hostname = True
     ssl_context.verify_mode = ssl.CERT_REQUIRED
