@@ -98,7 +98,7 @@ async def _periodic_cleanup():
 @app.on_event("startup")
 async def on_startup():
     await init_db()
-    asyncio.create_task(_periodic_cleanup())
+    # asyncio.create_task(_periodic_cleanup())
 
 class TokenRequest(BaseModel):
     token: str
