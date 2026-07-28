@@ -6,6 +6,8 @@ services:
       context: ./backend
     container_name: voice2form_backend
     restart: always
+    ports:
+      - "8000:8000"
     environment:
       - ENV_MODE=production
       # RDS connection should be provided via .env file or environment variables
